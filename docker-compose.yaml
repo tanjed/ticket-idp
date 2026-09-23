@@ -1,0 +1,83 @@
+# Standalone local stack for IdP: Postgres (hydra + kratos databases), Hydra,
+# Kratos. Lets the IdP team test Hydra/Kratos in isolation, without running
+# the Authorization Service, Traefik, or a real cluster.
+#
+#   docker compose up -d
+#   curl localhost:4444/.well-known/jwks.json
+#   curl localhost:4434/health/ready   # Kratos admin
+#   docker compose down -v
+#
+# Ports: Hydra public 4444 / admin 4445, Kratos public 4433 / admin 4434,
+# Postgres 5432. These are the same defaults the Authorization Service's own
+# local stack (../Gateway) uses for its plain Hydra container — don't run
+# both stacks at once unless you remap one of them.
+name: bus-idp-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hydra
+      POSTGRES_PASSWORD: hydra
+      POSTGRES_DB: hydra
+    volumes:
+      - ./local/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hydra -d hydra"]
+      interval: 2s
+      retries: 30
+
+  hydra-migrate:
+    image: oryd/hydra:v2.3.0
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DSN: postgres://hydra:hydra@postgres:5432/hydra?sslmode=disable
+    command: migrate sql -e --yes
+
+  hydra:
+    image: oryd/hydra:v2.3.0
+    depends_on:
+      hydra-migrate: { condition: service_completed_successfully }
+    environment:
+      DSN: postgres://hydra:hydra@postgres:5432/hydra?sslmode=disable
+      OAUTH2_TOKEN_HOOK_AUTH_CONFIG_VALUE: dev-token-hook-key
+      SECRETS_SYSTEM: dev-hydra-system-secret-at-least-16-bytes
+      SECRETS_COOKIE: dev-hydra-cookie-secret-at-least-16-bytes
+    command: serve all --dev --config /etc/hydra/hydra.yaml
+    volumes:
+      - ./local/hydra.yaml:/etc/hydra/hydra.yaml:ro
+    ports: ["4444:4444", "4445:4445"]
+
+  kratos-migrate:
+    image: oryd/kratos:v26.2.0
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      DSN: postgres://hydra:hydra@postgres:5432/kratos?sslmode=disable
+    volumes:
+      - ./local/kratos.yaml:/etc/config/kratos.yaml:ro
+      - ./local/identity.default.schema.json:/etc/config/identity.default.schema.json:ro
+    command: migrate sql -e --yes --config /etc/config/kratos.yaml
+
+  kratos:
+    image: oryd/kratos:v26.2.0
+    depends_on:
+      kratos-migrate: { condition: service_completed_successfully }
+    environment:
+      DSN: postgres://hydra:hydra@postgres:5432/kratos?sslmode=disable
+      # secretsCipher MUST be exactly 32 bytes or Kratos refuses to start —
+      # verified against the real binary while writing this stack.
+      SECRETS_DEFAULT: dev-kratos-secret-32-bytes-long!
+      SECRETS_COOKIE: dev-kratos-secret-32-bytes-long!
+      SECRETS_CIPHER: dev-kratos-secret-32-bytes-long!
+    command: serve all --dev --config /etc/config/kratos.yaml
+    volumes:
+      - ./local/kratos.yaml:/etc/config/kratos.yaml:ro
+      - ./local/identity.default.schema.json:/etc/config/identity.default.schema.json:ro
+    ports: ["4433:4433", "4434:4434"]
+
+volumes:
+  pgdata:

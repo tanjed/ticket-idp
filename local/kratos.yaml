@@ -1,0 +1,32 @@
+# Local Kratos config, mirrors chart/values.yaml's kratos.kratos.config
+# block. Verified against a real Kratos v26.2.0 binary (docker run oryd/
+# kratos:v26.2.0 serve all --config) while writing this: passes config
+# validation cleanly, including the selfservice/courier placeholders below.
+identity:
+  default_schema_id: default
+  schemas:
+    - id: default
+      url: file:///etc/config/identity.default.schema.json
+selfservice:
+  # Placeholder URLs: nothing serves these paths yet, Kratos isn't wired
+  # into any login flow (see the design spec section 2a).
+  default_browser_return_url: http://localhost:3001/
+  allowed_return_urls: [http://localhost:3001/]
+  methods:
+    password:
+      enabled: true
+  flows:
+    login:
+      ui_url: http://localhost:3001/login
+    registration:
+      ui_url: http://localhost:3001/registration
+serve:
+  public:
+    base_url: http://localhost:4433/
+  admin:
+    base_url: http://localhost:4434/
+courier:
+  smtp:
+    # Placeholder: Kratos's config schema requires a well-formed SMTP URI
+    # even though no recovery/verification flow will ever trigger it.
+    connection_uri: smtps://placeholder:placeholder@localhost:1025/?skip_ssl_verify=true

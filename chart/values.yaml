@@ -62,8 +62,6 @@ hydra:
           auth:
             type: api_key
             config: { in: header, name: X-Hook-Key }
-      grant:
-        refresh_token: { rotation_grace_period: 0s }
   deployment:
     extraEnv:
       - name: DSN
