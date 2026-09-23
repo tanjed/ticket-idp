@@ -21,7 +21,7 @@ services:
       POSTGRES_PASSWORD: hydra
       POSTGRES_DB: hydra
     volumes:
-      - ./local/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - pgdata:/var/lib/postgresql/data
     ports: ["5432:5432"]
     healthcheck:
@@ -48,7 +48,7 @@ services:
       SECRETS_COOKIE: dev-hydra-cookie-secret-at-least-16-bytes
     command: serve all --dev --config /etc/hydra/hydra.yaml
     volumes:
-      - ./local/hydra.yaml:/etc/hydra/hydra.yaml:ro
+      - ./docker/hydra.yaml:/etc/hydra/hydra.yaml:ro
     ports: ["4444:4444", "4445:4445"]
 
   kratos-migrate:
@@ -58,8 +58,8 @@ services:
     environment:
       DSN: postgres://hydra:hydra@postgres:5432/kratos?sslmode=disable
     volumes:
-      - ./local/kratos.yaml:/etc/config/kratos.yaml:ro
-      - ./local/identity.default.schema.json:/etc/config/identity.default.schema.json:ro
+      - ./docker/kratos.yaml:/etc/config/kratos.yaml:ro
+      - ./docker/identity.default.schema.json:/etc/config/identity.default.schema.json:ro
     command: migrate sql -e --yes --config /etc/config/kratos.yaml
 
   kratos:
@@ -75,8 +75,8 @@ services:
       SECRETS_CIPHER: dev-kratos-secret-32-bytes-long!
     command: serve all --dev --config /etc/config/kratos.yaml
     volumes:
-      - ./local/kratos.yaml:/etc/config/kratos.yaml:ro
-      - ./local/identity.default.schema.json:/etc/config/identity.default.schema.json:ro
+      - ./docker/kratos.yaml:/etc/config/kratos.yaml:ro
+      - ./docker/identity.default.schema.json:/etc/config/identity.default.schema.json:ro
     ports: ["4433:4433", "4434:4434"]
 
 volumes:
