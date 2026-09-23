@@ -1,0 +1,24 @@
+version: v2beta1
+name: idp
+
+deployments:
+  idp:
+    helm:
+      chart:
+        name: ./chart
+      valuesFiles:
+        - ./helmvars/dev.yaml
+
+dev:
+  idp-hydra:
+    imageSelector: oryd/hydra
+    ports:
+      - port: "4444:4444"
+      - port: "4445:4445"
+    logs: {}
+  idp-kratos:
+    imageSelector: oryd/kratos
+    ports:
+      - port: "4433:4433"
+      - port: "4434:4434"
+    logs: {}
