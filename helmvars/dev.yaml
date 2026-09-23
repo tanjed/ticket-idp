@@ -1,0 +1,12 @@
+domain: dev.bus.example
+hydra:
+  hydra:
+    config:
+      urls:
+        self: { issuer: https://idp.dev.bus.example/ }
+        login: https://login.dev.bus.example/
+        consent: https://auth.dev.bus.example/consent
+        logout: https://auth.dev.bus.example/logout
+      oauth2:
+        token_hook:
+          url: http://auth.dev.bus.example/hooks/token

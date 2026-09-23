@@ -1,0 +1,86 @@
+# Hand-written, not a chart dependency: Bitnami's Postgres chart moved behind
+# a paid Broadcom subscription in September 2025, and a Postgres operator
+# (e.g. CloudNativePG) is a cluster-wide prerequisite this chart shouldn't
+# assume. One StatefulSet hosts both Hydra's and Kratos's databases, same
+# role, no read replicas.
+#
+# CAUTION: postgres:16-alpine only reads POSTGRES_PASSWORD, and only runs
+# /docker-entrypoint-initdb.d scripts (including the extra-database script
+# below), on first boot (when the data directory is empty).
+# - Rotating the secrets.postgres Secret's password afterward does NOT
+#   change the running Postgres's password — you must also run ALTER USER
+#   inside it, or Hydra's/Kratos's DSNs (both built from Secrets that embed
+#   this password) will stop authenticating.
+# - Adding a new name to postgres.extraDatabases after first boot does NOT
+#   create that database — the init script below never re-runs. Create it
+#   by hand (psql -c "CREATE DATABASE ...") instead.
+# Both are Postgres-on-Kubernetes properties, not something this chart can
+# enforce.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ .Release.Name }}-postgres
+  labels: {{- include "idp.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ .Release.Name }}-postgres
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/name: idp, app.kubernetes.io/component: postgres, app.kubernetes.io/instance: {{ .Release.Name }} }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: idp, app.kubernetes.io/component: postgres, app.kubernetes.io/instance: {{ .Release.Name }} }
+    spec:
+      containers:
+        - name: postgres
+          image: {{ .Values.postgres.image }}
+          ports:
+            - { name: postgres, containerPort: 5432 }
+          env:
+            - { name: POSTGRES_USER, value: {{ .Values.postgres.username | quote }} }
+            - { name: POSTGRES_DB, value: {{ .Values.postgres.database | quote }} }
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: {{ .Values.secrets.postgres.name }}, key: password } }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data, subPath: pgdata }
+            - { name: initdb, mountPath: /docker-entrypoint-initdb.d }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", {{ .Values.postgres.username | quote }}] }
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", {{ .Values.postgres.username | quote }}] }
+          resources: {{- toYaml .Values.postgres.resources | nindent 12 }}
+      volumes:
+        - name: initdb
+          configMap:
+            name: {{ .Release.Name }}-postgres-initdb
+            defaultMode: 0755
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources: { requests: { storage: {{ .Values.postgres.storageSize }} } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-postgres
+  labels: {{- include "idp.labels" . | nindent 4 }}
+  annotations:
+    bus.io/domain: {{ include "idp.domain" . | quote }}
+spec:
+  clusterIP: None   # headless: a StatefulSet's own DNS needs no load-balancing across 1 replica
+  selector: { app.kubernetes.io/name: idp, app.kubernetes.io/component: postgres, app.kubernetes.io/instance: {{ .Release.Name }} }
+  ports:
+    - { name: postgres, port: 5432, targetPort: postgres }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Release.Name }}-postgres-initdb
+  labels: {{- include "idp.labels" . | nindent 4 }}
+data:
+  01-create-extra-databases.sh: |
+    #!/bin/sh
+    set -e
+    {{- range .Values.postgres.extraDatabases }}
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -c "CREATE DATABASE {{ . }} OWNER $POSTGRES_USER;"
+    {{- end }}

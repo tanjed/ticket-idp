@@ -1,0 +1,141 @@
+# Public base domain. IdP is served at idp.<domain>. See helmvars/ for the
+# per-environment values this chart actually needs (domain, plus Hydra's four
+# URLs and the token-hook URL, which can't be derived from domain because
+# subchart values can't be templated).
+domain: ""
+
+replicas: 1   # Hydra pod count
+
+# Names of pre-created Secrets. This chart never creates secrets.
+secrets:
+  # keys: password (Postgres's own superuser/app password), dsn (Hydra's full
+  # connection string — must embed the SAME password as the password key, and
+  # must point at the Service this chart creates: postgres://<postgres.username>:<password>@<release>-postgres:5432/<postgres.database>?sslmode=disable).
+  postgres: { name: idp-postgres }
+  hydra: { name: idp-hydra }         # keys: secretsSystem, secretsCookie
+  # Must hold the SAME value as the Authorization Service's hook-key secret.
+  hookApiKey: { name: idp-hook, key: key }
+  kratos: { name: idp-kratos }       # keys: dsn, secretsDefault, secretsCookie, secretsCipher — see kratos: below
+
+postgres:
+  image: postgres:16-alpine
+  storageSize: 2Gi
+  database: hydra            # created automatically via POSTGRES_DB, first boot only
+  extraDatabases: [kratos]   # created by templates/postgres.yaml's init script, ALSO first boot only —
+                             # adding a name here after Postgres has already initialized does nothing;
+                             # create that database by hand instead (see the CAUTION comment in postgres.yaml)
+  username: hydra            # both databases share this one role — simplest option, no cross-access concerns
+  resources: {}
+
+# Ory Hydra: the official chart, configured here. Everything under `hydra:`
+# is passed straight to that chart — its own top-level `hydra:` values key
+# nests inside, so the full path to Hydra's own settings is `hydra.hydra.*`.
+# Set enabled: false only for a template-only render that skips Hydra.
+#
+# Needs the pre-created `idp-hydra` Secret (keys: secretsSystem,
+# secretsCookie) and `idp-postgres` Secret's `dsn` key — DSN is supplied via
+# extraEnv below, not through hydra.hydra.config, because the official
+# chart's own `DSN` env var convention already reads from a Secret directly.
+hydra:
+  enabled: true
+  fullnameOverride: idp-hydra   # Service names: idp-hydra-admin, idp-hydra-public
+  maester: { enabled: false }
+  secret: { enabled: false, nameOverride: idp-hydra }
+  hydra:
+    automigration: { enabled: true }
+    config:
+      serve:
+        public: { port: 4444 }
+        admin: { port: 4445 }   # cluster-internal only. Never route it through Traefik.
+      strategies: { access_token: jwt }
+      ttl: { access_token: 10m, refresh_token: 720h }
+      oauth2:
+        # Hydra DROPS custom claims from the JWT unless they are listed here,
+        # silently — no error, no log line. This list MUST equal the
+        # Authorization Service's idpglue.HookClaimNames(). Kept in sync by
+        # hand: see docs/superpowers/specs/2026-09-22-iam-authorization-split-design.md
+        # section 3 in the Auth repo. If you change this list, check that
+        # file's Go source first.
+        allowed_top_level_claims: [user_type, company_id, role_ids, authz_version, user_version]
+        token_hook:
+          url: ""   # set per environment in helmvars/: the Authorization Service's /hooks/token URL
+          auth:
+            type: api_key
+            config: { in: header, name: X-Hook-Key }
+      grant:
+        refresh_token: { rotation_grace_period: 0s }
+  deployment:
+    extraEnv:
+      - name: DSN
+        valueFrom: { secretKeyRef: { name: idp-postgres, key: dsn } }
+      - name: OAUTH2_TOKEN_HOOK_AUTH_CONFIG_VALUE
+        valueFrom: { secretKeyRef: { name: idp-hook, key: key } }
+
+# Ory Kratos: bundled but NOT wired into the login flow this round — running
+# infrastructure only. Nothing in this platform calls its public or admin
+# API yet; the Authorization Service still owns credential storage and the
+# login handler, unchanged. Same nesting convention as hydra: above, its own
+# values sit one level in (kratos.kratos.*).
+#
+# Needs its own pre-created `idp-kratos` Secret with FOUR keys: dsn,
+# secretsDefault, secretsCookie, secretsCipher. secretsCipher MUST be
+# exactly 32 bytes — verified against a real Kratos v26.2.0 binary: a
+# 31-byte value is rejected at startup with "length must be >= 32, but got
+# 31", before Kratos even attempts a DB connection. Unlike Hydra above,
+# Kratos reads all four keys straight from this Secret by name (see
+# kratos.secretname / kratos.dsn in its own _helpers.tpl) — there is no
+# extraEnv override path for this, and no helm template error if a key is
+# missing: secret.enabled: false skips Helm's own generation entirely, so a
+# missing key fails at pod start with a Kubernetes "couldn't find key X in
+# Secret idp-kratos" event instead.
+kratos:
+  enabled: true
+  fullnameOverride: idp-kratos
+  secret: { enabled: false, nameOverride: idp-kratos }
+  courier: { enabled: false }   # no email flows this round; skip the separate courier StatefulSet
+  kratos:
+    automigration: { enabled: true }
+    identitySchemas:
+      identity.default.schema.json: |
+        {
+          "$id": "https://schemas.bus2.example/identity.default.schema.json",
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "title": "Bus 2.0 identity",
+          "type": "object",
+          "properties": {
+            "traits": {
+              "type": "object",
+              "properties": {
+                "phone": { "type": "string" }
+              },
+              "required": ["phone"],
+              "additionalProperties": false
+            }
+          }
+        }
+    config:
+      identity:
+        default_schema_id: default
+        schemas:
+          - id: default
+            url: file:///etc/config/identity.default.schema.json
+      selfservice:
+        # Placeholder URLs: nothing serves these paths yet since no login
+        # flow calls Kratos this round. Real values land when that follow-up
+        # is planned.
+        default_browser_return_url: http://idp-kratos-not-wired.invalid/
+        allowed_return_urls: [http://idp-kratos-not-wired.invalid/]
+        methods:
+          password: { enabled: true }
+        flows:
+          login: { ui_url: http://idp-kratos-not-wired.invalid/login }
+          registration: { ui_url: http://idp-kratos-not-wired.invalid/registration }
+      serve:
+        public: { base_url: http://idp-kratos-public/ }
+        admin: { base_url: http://idp-kratos-admin/ }
+      courier:
+        smtp:
+          # Placeholder: Kratos's config schema requires a well-formed SMTP
+          # URI even though no recovery/verification flow will ever trigger
+          # the courier this round.
+          connection_uri: smtps://placeholder:placeholder@localhost:1025/?skip_ssl_verify=true

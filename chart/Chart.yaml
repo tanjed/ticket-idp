@@ -1,0 +1,15 @@
+apiVersion: v2
+name: idp
+description: Bus 2.0 IdP. Ory Hydra (OAuth2/OIDC) plus Ory Kratos (identity schema, bundled not yet wired), each with its own Postgres database.
+type: application
+version: 0.1.0
+appVersion: "2.3.0"
+dependencies:
+  - name: hydra
+    version: 0.59.0
+    repository: https://k8s.ory.sh/helm/charts
+    condition: hydra.enabled
+  - name: kratos
+    version: 0.64.0
+    repository: https://k8s.ory.sh/helm/charts
+    condition: kratos.enabled
