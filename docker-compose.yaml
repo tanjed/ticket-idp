@@ -8,10 +8,10 @@
 #   docker compose down -v
 #
 # Ports: Hydra public 4444 / admin 4445, Kratos public 4433 / admin 4434,
-# Postgres 5432. These are the same defaults the Authorization Service's own
+# login UI 3001, Postgres 5432. These are the same defaults the Authorization Service's own
 # local stack (../Gateway) uses for its plain Hydra container — don't run
 # both stacks at once unless you remap one of them.
-name: bus-idp-local
+name: bus-idp
 
 services:
   postgres:
@@ -77,7 +77,18 @@ services:
     volumes:
       - ./docker/kratos.yaml:/etc/config/kratos.yaml:ro
       - ./docker/identity.default.schema.json:/etc/config/identity.default.schema.json:ro
+      - ./docker/courier.body.jsonnet:/etc/config/courier.body.jsonnet:ro
     ports: ["4433:4433", "4434:4434"]
+
+  # Login / registration UI (Next.js). Kratos redirects the browser here
+  # (selfservice.flows.*.ui_url in docker/kratos.yaml).
+  ui:
+    build: ./ui
+    depends_on: [kratos]
+    environment:
+      KRATOS_INTERNAL_URL: http://kratos:4433
+      KRATOS_BROWSER_URL: http://localhost:4433
+    ports: ["3001:3001"]
 
 volumes:
   pgdata:

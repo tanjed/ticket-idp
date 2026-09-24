@@ -7,9 +7,68 @@
     "traits": {
       "type": "object",
       "properties": {
-        "phone": { "type": "string" }
+        "name": {
+          "type": "object",
+          "properties": {
+            "first": {
+              "title": "First name",
+              "type": "string"
+            },
+            "last": {
+              "title": "Last name",
+              "type": "string"
+            }
+          },
+          "required": [
+            "first",
+            "last"
+          ]
+        },
+        "phone": {
+          "type": "string",
+          "title": "Mobile No",
+          "format": "tel",
+          "ory.sh/kratos": {
+            "credentials": {
+              "password": {
+                "identifier": true
+              }
+            },
+            "recovery": {
+              "via": "sms"
+            },
+            "verification": {
+              "via": "sms"
+            }
+          }
+        },
+        "email": {
+          "type": "string",
+          "title": "Email",
+          "format": "email",
+          "ory.sh/kratos": {
+            "verification": {
+              "via": "email"
+            },
+            "recovery": {
+              "via": "email"
+            }
+          }
+        },
+        "gender": {
+          "type": "string",
+          "title": "Gender",
+          "enum": [
+            "male",
+            "female"
+          ]
+        }
       },
-      "required": ["phone"],
+      "required": [
+        "phone",
+        "email",
+        "name"
+      ],
       "additionalProperties": false
     }
   }
