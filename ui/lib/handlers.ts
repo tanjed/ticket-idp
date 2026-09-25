@@ -1,0 +1,71 @@
+import { acceptLogin } from "./hydra";
+import { activeFlash, clearCtx, getCtx, setCtx, type Ctx } from "./ctx";
+import { fieldMessages, type Flow } from "./flow";
+import { getIdentity, phoneVerified } from "./identity";
+
+const UI = process.env.PUBLIC_UI_URL ?? "http://localhost:3001";
+
+export const to = (path: string) => Response.redirect(`${UI}${path}`, 303);
+
+// CSRF: SameSite=Lax cookie plus an Origin check.
+export function originOk(req: Request): boolean {
+  const origin = req.headers.get("origin");
+  return !origin || origin === new URL(UI).origin;
+}
+
+export const noContext = () =>
+  new Response("This page can only be reached by signing in through an app. Please go back to your app and try again.", {
+    status: 403,
+  });
+
+export async function guard(req: Request): Promise<{ ctx: Ctx } | { res: Response }> {
+  if (!originOk(req)) return { res: new Response("Bad origin", { status: 403 }) };
+  const ctx = await getCtx();
+  return ctx ? { ctx } : { res: noContext() };
+}
+
+export const str = (v: FormDataEntryValue | null) => (typeof v === "string" ? v.trim() : "");
+
+// Re-render a page with Kratos' messages and the non-secret values typed.
+export async function back(path: string, ctx: Ctx, flow: Flow | undefined, values: Record<string, string> = {}, extra?: Partial<Ctx>) {
+  const fields = fieldMessages(flow);
+  if (Object.keys(fields).length === 0) {
+    // Kratos answered with an error object rather than a flow (a 500, a rate limit, ...): never reload silently.
+    console.error("[kratos] nothing to show for this answer:", JSON.stringify(flow ?? null).slice(0, 500));
+    const limited = (flow as { error?: { code?: number } } | undefined)?.error?.code === 429;
+    fields._form = [{
+      id: 0,
+      type: "error",
+      text: limited ? "Too many attempts. Please wait a moment and try again." : "Something went wrong. Please try again.",
+    }];
+  }
+  await setCtx({ ...ctx, ...extra, flash: { at: Date.now(), fields, values } });
+  return to(path);
+}
+
+export async function backWithText(path: string, ctx: Ctx, text: string, type = "error", extra?: Partial<Ctx>) {
+  await setCtx({
+    ...ctx,
+    ...extra,
+    flash: { at: Date.now(), fields: { _form: [{ id: 0, text, type }] }, values: {} },
+  });
+  return to(path);
+}
+
+// Authenticated and phone-verified: accept the Hydra login and follow redirect_to.
+export async function finishLogin(ctx: Ctx, sub: string): Promise<Response> {
+  const identity = await getIdentity(sub);
+  if (!identity || !phoneVerified(identity)) {
+    return backWithText("/login", { ch: ctx.ch, exp: ctx.exp }, "Your mobile number is not verified.");
+  }
+  try {
+    const { redirect_to } = await acceptLogin(ctx.ch, { subject: sub, remember: true, remember_for: 3600 });
+    await clearCtx();
+    return Response.redirect(redirect_to, 303);
+  } catch {
+    await clearCtx();
+    return new Response("This sign-in request has expired. Please go back to your app and try again.", { status: 400 });
+  }
+}
+
+export { activeFlash };

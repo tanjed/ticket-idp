@@ -1,8 +1,7 @@
 import type { Message } from "./flow";
 
-// Kratos can't customise its own messages, so we own the copy here, keyed by
-// Kratos' stable message id. Unmapped ids fall back to Kratos' English text.
-// Ids: https://www.ory.com/docs/kratos/concepts/ui-messages
+// Kratos can't customise its messages: our copy, keyed by message id (unmapped ids fall
+// back to Kratos' text). Ids: https://www.ory.com/docs/kratos/concepts/ui-messages
 const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 
 export function copy(m: Message, label?: string): string {
@@ -15,6 +14,10 @@ export function copy(m: Message, label?: string): string {
       return "Invalid Mobile/Password";
     case 4000007: // registration: identifier already taken
       return "An account with this mobile number or email already exists.";
+    case 1080003: // verification code sent (Kratos text says "email"; ours is SMS)
+      return "We sent an OTP to your mobile number.";
+    case 4070006: // verification code wrong / used
+      return "Invalid or expired OTP. Please try again.";
     case 4000032: // password too short
       return `Password must be at least ${m.context?.min_length ?? 8} characters.`;
     case 4000040:

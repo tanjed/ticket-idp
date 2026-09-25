@@ -1,16 +1,12 @@
+import Blocked from "@/components/blocked";
 import RegistrationForm from "@/components/registration-form";
-import { getFlow, startFlow } from "@/lib/kratos";
+import { activeFlash, getCtx } from "@/lib/ctx";
 
 export const dynamic = "force-dynamic";
 
-export default async function Registration({
-  searchParams,
-}: {
-  searchParams: Promise<{ flow?: string }>;
-}) {
-  const { flow: id } = await searchParams;
-  if (!id) startFlow("registration");
-  const flow = await getFlow("registration", id);
+export default async function Registration() {
+  const ctx = await getCtx();
+  if (!ctx) return <Blocked />;
 
   return (
     <main className="page">
@@ -19,7 +15,7 @@ export default async function Registration({
         Create your account once and enjoy a seamless journey across all Shohoz
         services. One account for all your travel needs.
       </p>
-      <RegistrationForm flow={flow} />
+      <RegistrationForm flash={activeFlash(ctx)} />
     </main>
   );
 }

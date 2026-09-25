@@ -89,3 +89,13 @@ h1 { margin: 0 0 4px; font-size: 32px; line-height: 1.2; font-weight: 800; }
 .forgot { margin: -4px 0 8px; text-align: right; font-size: 14px; }
 .forgot a { color: var(--green-dark); font-weight: 600; text-decoration: none; }
 .forgot a:hover { text-decoration: underline; }
+
+.status { padding-top: 48px; text-align: center; }
+.status h1 { margin-bottom: 8px; }
+.status .lead { max-width: 420px; margin: 0 auto 24px; }
+.status .submit { display: grid; place-items: center; max-width: 260px; margin: 0 auto; text-decoration: none; }
+.status-icon { display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto 20px; border-radius: 50%; }
+.status-icon.lock { color: var(--green-dark); background: #e7f6ec; }
+.status-icon.check { color: var(--green-dark); background: #e7f6ec; }
+.status-icon.clock { color: #b45309; background: #fef3c7; }
+.status-icon.alert { color: var(--error); background: #fdeaea; }
