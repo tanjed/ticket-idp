@@ -1,0 +1,19 @@
+# Code owners. Everything is owned by the maintainer for now; the specific
+# paths below are listed so a second owner can be added to the sensitive ones
+# without restructuring this file. The last matching pattern wins.
+*                                   @tanjed
+
+# Sign-in, credentials, and what reaches Kratos and Hydra
+/ui/app/oauth/                      @tanjed
+/ui/app/api/                        @tanjed
+/ui/lib/                            @tanjed
+
+# Ory config (shared by docker-compose and the chart) and deployment
+/chart/                             @tanjed
+/helmvars/                          @tanjed
+/docker-compose.yaml                @tanjed
+
+# The rules this repo works by
+/AGENTS.md                          @tanjed
+/CONTRIBUTING.md                    @tanjed
+/.github/                           @tanjed
