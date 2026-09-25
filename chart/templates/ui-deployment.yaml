@@ -1,0 +1,50 @@
+{{- if .Values.ui.enabled }}
+# The login UI (../ui): Hydra's login/consent/logout handler and the only client of Kratos.
+# Secrets are pre-created (secrets.ui); this chart never creates them.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "idp.uiName" . }}
+  labels: {{- include "idp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+spec:
+  replicas: {{ .Values.ui.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: idp
+      app.kubernetes.io/component: ui
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels: {{- include "idp.labels" . | nindent 8 }}
+        app.kubernetes.io/component: ui
+    spec:
+      containers:
+        - name: ui
+          image: "{{ required "ui.image.repository is required (see helmvars/)" .Values.ui.image.repository }}:{{ required "ui.image.tag is required (see helmvars/)" .Values.ui.image.tag }}"
+          ports: [{ name: http, containerPort: 3001 }]
+          env:
+            - { name: PUBLIC_UI_URL, value: "https://{{ include "idp.uiHost" . }}" }
+            # Kratos: private, cluster-internal only.
+            - { name: KRATOS_INTERNAL_URL, value: "http://idp-kratos-public" }
+            - { name: KRATOS_ADMIN_URL, value: "http://idp-kratos-admin" }
+            # Hydra: admin for login/consent/logout; JWKS to verify access tokens.
+            - { name: HYDRA_ADMIN_URL, value: "http://idp-hydra-admin:4445" }
+            - { name: HYDRA_JWKS_URL, value: "http://idp-hydra-public:4444/.well-known/jwks.json" }
+            - { name: JWT_ISSUER, value: "https://idp.{{ include "idp.domain" . }}/" }
+            - { name: API_AUDIENCE, value: {{ .Values.ui.apiAudience | quote }} }
+            - { name: CORS_ALLOWED_ORIGINS, value: {{ join "," .Values.ui.corsAllowedOrigins | quote }} }
+            {{- with .Values.ui.fallbackUrl }}
+            - { name: UI_FALLBACK_URL, value: {{ . | quote }} }
+            {{- end }}
+            # Events: every domain event goes to this Kafka topic.
+            - { name: KAFKA_BROKERS, value: {{ required "kafka.brokers is required (see helmvars/)" .Values.kafka.brokers | quote }} }
+            - { name: KAFKA_TOPIC_EVENTS, value: {{ .Values.kafka.topic | quote }} }
+            {{- range $env, $key := dict "UI_COOKIE_SECRET" "cookieSecret" "EMAIL_TOKEN_SECRET" "emailTokenSecret" }}
+            - name: {{ $env }}
+              valueFrom: { secretKeyRef: { name: {{ $.Values.secrets.ui.name }}, key: {{ $key }} } }
+            {{- end }}
+          readinessProbe: { httpGet: { path: /, port: http } }
+          livenessProbe: { httpGet: { path: /, port: http }, initialDelaySeconds: 10 }
+          resources: {{- toYaml .Values.ui.resources | nindent 12 }}
+{{- end }}

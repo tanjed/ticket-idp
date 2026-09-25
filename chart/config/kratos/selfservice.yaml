@@ -1,0 +1,60 @@
+# Self-service flows and the hooks that announce USER_* events. Kratos is private (only the UI
+# calls it), so the ui_url / return_url values are only what Kratos requires; they're never followed.
+selfservice:
+  default_browser_return_url: http://idp-ui:3001/
+  allowed_return_urls: [http://idp-ui:3001/]
+  methods:
+    password: { enabled: true }
+    code: { enabled: true }   # phone OTP + password-recovery codes
+  flows:
+    login:
+      ui_url: http://idp-ui:3001/login
+      after:
+        password:
+          hooks:
+            # Unverified phones get the OTP flow instead of a session.
+            - hook: require_verified_address
+            # USER_LOGGED_IN. &webhook is reused by the other hooks, which only change the body.
+            - hook: web_hook
+              config: &webhook
+                url: http://idp-ui:3001/api/webhooks/kratos
+                method: POST
+                body: file:///etc/kratos/user-logged-in.jsonnet
+                response: { ignore: true }
+                can_interrupt: false
+    registration:
+      ui_url: http://idp-ui:3001/registration
+      enable_legacy_one_step: true   # profile + password on one form
+      after:
+        password:
+          hooks:
+            - hook: session
+            - hook: web_hook   # USER_REGISTERED
+              config:
+                <<: *webhook
+                body: file:///etc/kratos/user-registered.jsonnet
+            - hook: show_verification_ui   # phone OTP
+    verification:
+      enabled: true
+      use: code
+      ui_url: http://idp-ui:3001/verification
+      after:
+        default_browser_return_url: http://idp-ui:3001/
+        hooks:
+          - hook: web_hook   # USER_MOBILE_VERIFICATION_SUCCESS
+            config:
+              <<: *webhook
+              body: file:///etc/kratos/user-mobile-verified.jsonnet
+    recovery:
+      enabled: true
+      use: code
+      ui_url: http://idp-ui:3001/recovery
+    settings:
+      ui_url: http://idp-ui:3001/settings
+      after:
+        password:
+          hooks:
+            - hook: web_hook   # USER_RESET_PASSWORD
+              config:
+                <<: *webhook
+                body: file:///etc/kratos/user-reset-password.jsonnet

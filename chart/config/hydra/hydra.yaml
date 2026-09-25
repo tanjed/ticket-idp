@@ -1,0 +1,16 @@
+# Hydra config that is the same everywhere. Mounted at /etc/hydra in docker-compose and in the chart.
+# The URLs that differ per environment (issuer, login / consent / logout) are not here:
+# docker-compose sets them with Hydra env vars, the chart with helmvars/.
+serve:
+  public:
+    port: 4444
+  admin:
+    port: 4445   # cluster-internal only. Never route it through Traefik.
+strategies:
+  access_token: jwt
+ttl:
+  access_token: 10m
+  refresh_token: 720h
+oauth2:
+  # Hydra silently DROPS custom claims not listed here. These are set by the UI at consent.
+  allowed_top_level_claims: [email_verified, phone_number_verified]

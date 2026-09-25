@@ -1,17 +1,12 @@
-# Standalone local stack for IdP: Postgres (hydra + kratos databases), Hydra,
-# Kratos. Lets the IdP team test Hydra/Kratos in isolation, without running
-# the Authorization Service, Traefik, or a real cluster.
-#
-#   docker compose up -d
-#   curl localhost:4444/.well-known/jwks.json
-#   curl localhost:4434/health/ready   # Kratos admin
-#   docker compose down -v
-#
-# Ports: Hydra public 4444 / admin 4445, Kratos public 4433 / admin 4434,
-# login UI 3001, Postgres 5432. These are the same defaults the Authorization Service's own
-# local stack (../Gateway) uses for its plain Hydra container — don't run
-# both stacks at once unless you remap one of them.
+# Local stack: Postgres (hydra + kratos databases), Hydra, Kratos (private), Kafka (Redpanda), the UI.
+#   docker compose up -d --build   # then run ../TestClient to try a login (local OTP: 123456)
+# Ports: Hydra public 4444, UI 3001; Hydra admin 4445, Postgres 5432 and Kafka 19092 on loopback.
+# Hydra's ports match ../Traefik's stack and the Authorization Service's: don't run them together.
+# Runs on the external `shohoz` network (make network).
 name: bus-idp
+
+# Ory config lives once, in chart/config/ (the chart uses the same files) and is mounted as is.
+# After editing it: docker compose restart kratos idp-hydra.
 
 services:
   postgres:
@@ -21,9 +16,11 @@ services:
       POSTGRES_PASSWORD: hydra
       POSTGRES_DB: hydra
     volumes:
-      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
       - pgdata:/var/lib/postgresql/data
-    ports: ["5432:5432"]
+    configs:
+      - source: postgres-init
+        target: /docker-entrypoint-initdb.d/init.sql
+    ports: ["127.0.0.1:5432:5432"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U hydra -d hydra"]
       interval: 2s
@@ -37,19 +34,25 @@ services:
       DSN: postgres://hydra:hydra@postgres:5432/hydra?sslmode=disable
     command: migrate sql -e --yes
 
-  hydra:
+  idp-hydra:
     image: oryd/hydra:v2.3.0
     depends_on:
       hydra-migrate: { condition: service_completed_successfully }
     environment:
       DSN: postgres://hydra:hydra@postgres:5432/hydra?sslmode=disable
-      OAUTH2_TOKEN_HOOK_AUTH_CONFIG_VALUE: dev-token-hook-key
       SECRETS_SYSTEM: dev-hydra-system-secret-at-least-16-bytes
       SECRETS_COOKIE: dev-hydra-cookie-secret-at-least-16-bytes
-    command: serve all --dev --config /etc/hydra/hydra.yaml
+      # Per-environment values (the chart sets these through helmvars/ instead).
+      URLS_SELF_ISSUER: http://localhost:4444/
+      URLS_LOGIN: http://localhost:3001/oauth/login
+      URLS_CONSENT: http://localhost:3001/oauth/consent
+      URLS_LOGOUT: http://localhost:3001/oauth/logout
+      URLS_POST_LOGOUT_REDIRECT: http://localhost:3001/signed-out
+    command: [serve, all, --dev, --config, /etc/hydra/hydra.yaml]
     volumes:
-      - ./docker/hydra.yaml:/etc/hydra/hydra.yaml:ro
-    ports: ["4444:4444", "4445:4445"]
+      - ./chart/config/hydra/hydra.yaml:/etc/hydra/hydra.yaml:ro
+    # Public API for clients; admin is loopback-only (client registration).
+    ports: ["4444:4444", "127.0.0.1:4445:4445"]
 
   kratos-migrate:
     image: oryd/kratos:v26.2.0
@@ -57,10 +60,9 @@ services:
       postgres: { condition: service_healthy }
     environment:
       DSN: postgres://hydra:hydra@postgres:5432/kratos?sslmode=disable
+    command: [migrate, sql, -e, --yes, --config, /etc/kratos/kratos.yaml]
     volumes:
-      - ./docker/kratos.yaml:/etc/config/kratos.yaml:ro
-      - ./docker/identity.default.schema.json:/etc/config/identity.default.schema.json:ro
-    command: migrate sql -e --yes --config /etc/config/kratos.yaml
+      - ./chart/config/kratos:/etc/kratos:ro
 
   kratos:
     image: oryd/kratos:v26.2.0
@@ -68,27 +70,95 @@ services:
       kratos-migrate: { condition: service_completed_successfully }
     environment:
       DSN: postgres://hydra:hydra@postgres:5432/kratos?sslmode=disable
-      # secretsCipher MUST be exactly 32 bytes or Kratos refuses to start —
-      # verified against the real binary while writing this stack.
+      # secretsCipher must be exactly 32 bytes.
       SECRETS_DEFAULT: dev-kratos-secret-32-bytes-long!
       SECRETS_COOKIE: dev-kratos-secret-32-bytes-long!
       SECRETS_CIPHER: dev-kratos-secret-32-bytes-long!
-    command: serve all --dev --config /etc/config/kratos.yaml
+    command:
+      - serve
+      - all
+      - --dev
+      # Runs the courier worker: without it OTP / recovery messages are never sent.
+      - --watch-courier
+      - --config=/etc/kratos/kratos.yaml
+      - --config=/etc/kratos/selfservice.yaml
+      - --config=/etc/kratos/courier.yaml
     volumes:
-      - ./docker/kratos.yaml:/etc/config/kratos.yaml:ro
-      - ./docker/identity.default.schema.json:/etc/config/identity.default.schema.json:ro
-      - ./docker/courier.body.jsonnet:/etc/config/courier.body.jsonnet:ro
-    ports: ["4433:4433", "4434:4434"]
+      - ./chart/config/kratos:/etc/kratos:ro
+    # Not published: only the UI reaches Kratos, over the compose network.
 
-  # Login / registration UI (Next.js). Kratos redirects the browser here
-  # (selfservice.flows.*.ui_url in docker/kratos.yaml).
-  ui:
+  # Local Kafka (Redpanda). Other repos use idp-kafka:9092 on the shared network; the host uses localhost:19092.
+  idp-kafka:
+    image: redpandadata/redpanda:v24.3.1
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --overprovisioned
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://idp-kafka:9092,external://localhost:19092
+    ports: ["127.0.0.1:19092:19092"]
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:.*true'"]
+      interval: 3s
+      retries: 40
+
+  # One-shot: creates the topic the UI publishes to.
+  idp-kafka-init:
+    image: redpandadata/redpanda:v24.3.1
+    depends_on:
+      idp-kafka: { condition: service_healthy }
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - rpk topic create idp.events -X brokers=idp-kafka:9092 || true
+    restart: "no"
+
+  # Login UI (Next.js): Hydra's login/consent/logout handler and the only client of Kratos.
+  idp-ui:
     build: ./ui
-    depends_on: [kratos]
+    depends_on:
+      kratos: { condition: service_started }
+      idp-kafka-init: { condition: service_completed_successfully }
     environment:
       KRATOS_INTERNAL_URL: http://kratos:4433
-      KRATOS_BROWSER_URL: http://localhost:4433
+      # Encrypts the UI's login-context cookie (login_challenge + flow state).
+      UI_COOKIE_SECRET: dev-ui-cookie-secret-change-me-32-bytes
+      KRATOS_ADMIN_URL: http://kratos:4434
+      DEV_STATIC_OTP: "123456"
+      # DEV_LOG_EMAIL_LINKS prints email links in the logs (no mailer consumes the events locally).
+      EMAIL_TOKEN_SECRET: dev-email-token-secret-change-me
+      PUBLIC_UI_URL: http://localhost:3001
+      DEV_LOG_EMAIL_LINKS: "1"
+      # Hydra login/consent + token-authenticated API (ui/lib/hydra.ts).
+      HYDRA_ADMIN_URL: http://idp-hydra:4445
+      # API bearer tokens are verified as JWTs against Hydra's JWKS.
+      HYDRA_JWKS_URL: http://idp-hydra:4444/.well-known/jwks.json
+      JWT_ISSUER: http://localhost:4444/
+      API_AUDIENCE: bus-api
+      # Events (ui/lib/events.ts): every domain event goes to one Kafka topic.
+      KAFKA_BROKERS: idp-kafka:9092
+      KAFKA_TOPIC_EVENTS: idp.events
+      CORS_ALLOWED_ORIGINS: http://localhost:3002
+      UI_FALLBACK_URL: http://localhost:3002   # where an auth page opened directly redirects to (unset: a 403 page)
     ports: ["3001:3001"]
+
+# First boot only: one role (hydra) and two databases, hydra (POSTGRES_DB) and kratos.
+# Mirrors chart/templates/postgres.yaml.
+configs:
+  postgres-init:
+    content: |
+      CREATE DATABASE kratos OWNER hydra;
+
+# Every service runs on the external `shohoz` network, shared by the repos here (IdP, TestClient,
+# Traefik). Create it once: make network. Docker DNS aliases a service name on every network, so
+# names must stay unique across those repos (hence idp-hydra, idp-ui, idp-kafka).
+networks:
+  default:
+    name: shohoz
+    external: true
 
 volumes:
   pgdata:

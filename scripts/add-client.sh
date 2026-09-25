@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# Creates or updates an OAuth2 client in Hydra. Idempotent and safe to
-# re-run: an existing client is updated in place (PUT, with client_secret
-# omitted from the body) rather than deleted and recreated, so re-running
-# this to add a redirect_uri never invalidates that client's existing
-# secret or any live token issued under it. A missing client is created
+# Creates or updates an OAuth2 client in Hydra. Idempotent: an existing client is updated in
+# place (PUT, secret omitted) so its secret and live tokens survive; a missing one is created
 # (POST) with a generated secret unless SECRET is given.
 set -euo pipefail
 

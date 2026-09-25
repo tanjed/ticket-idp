@@ -1,0 +1,17 @@
+# Messages that carry a code (phone OTP, recovery code) leave Kratos through its courier, which
+# only speaks HTTP: both channels post to the same webhook as the hooks. Each has its own body
+# template (the sms channel requires one). Non-2xx makes Kratos retry.
+courier:
+  delivery_strategy: http
+  http:   # email: the recovery code
+    request_config: &courier_request
+      url: http://idp-ui:3001/api/webhooks/kratos
+      method: POST
+      headers: { Content-Type: application/json }
+      body: file:///etc/kratos/user-forgot-password.jsonnet
+  channels:
+    - id: sms   # the phone OTP
+      type: http
+      request_config:
+        <<: *courier_request
+        body: file:///etc/kratos/user-mobile-verification-request.jsonnet

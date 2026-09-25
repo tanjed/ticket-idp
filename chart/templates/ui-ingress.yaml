@@ -1,0 +1,30 @@
+{{- if and .Values.ui.enabled .Values.ui.ingress.enabled }}
+# Only the paths users and clients need. /api/webhooks is deliberately not routed (in-cluster only).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "idp.uiName" . }}
+  labels: {{- include "idp.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ui
+  {{- with .Values.ui.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ui.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.ui.ingress.tlsSecretName }}
+  tls:
+    - hosts: [{{ include "idp.uiHost" $ }}]
+      secretName: {{ . }}
+  {{- end }}
+  rules:
+    - host: {{ include "idp.uiHost" . }}
+      http:
+        paths:
+          {{- range .Values.ui.ingress.paths }}
+          - path: {{ . }}
+            pathType: Prefix
+            backend: { service: { name: {{ include "idp.uiName" $ }}, port: { name: http } } }
+          {{- end }}
+{{- end }}

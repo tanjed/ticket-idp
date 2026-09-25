@@ -1,0 +1,22 @@
+# Only the UI may call Kratos (needs a CNI that enforces NetworkPolicy). Egress is not restricted.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-kratos-private
+  labels: {{- include "idp.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kratos
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: idp
+              app.kubernetes.io/component: ui
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - { protocol: TCP, port: 4433 }
+        - { protocol: TCP, port: 4434 }

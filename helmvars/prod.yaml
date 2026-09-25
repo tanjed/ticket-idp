@@ -4,9 +4,11 @@ hydra:
     config:
       urls:
         self: { issuer: https://idp.bus.example/ }
-        login: https://login.bus.example/
-        consent: https://auth.bus.example/consent
-        logout: https://auth.bus.example/logout
-      oauth2:
-        token_hook:
-          url: http://auth.bus.example/hooks/token
+        login: https://login.bus.example/oauth/login
+        consent: https://login.bus.example/oauth/consent
+        logout: https://login.bus.example/oauth/logout
+        post_logout_redirect: https://login.bus.example/signed-out
+ui:
+  image: { repository: registry.bus.example/idp-ui, tag: "0.1.0" }   # PLACEHOLDER: the image built from ui/
+kafka:
+  brokers: kafka.bus.example:9092                          # PLACEHOLDER: this environment's Kafka

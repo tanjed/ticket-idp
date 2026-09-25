@@ -1,0 +1,6 @@
+# Kratos identity schema. Mounted at /etc/kratos in docker-compose and in the chart.
+identity:
+  default_schema_id: default
+  schemas:
+    - id: default
+      url: file:///etc/kratos/identity.default.schema.json

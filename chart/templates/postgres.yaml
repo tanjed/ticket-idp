@@ -1,21 +1,9 @@
-# Hand-written, not a chart dependency: Bitnami's Postgres chart moved behind
-# a paid Broadcom subscription in September 2025, and a Postgres operator
-# (e.g. CloudNativePG) is a cluster-wide prerequisite this chart shouldn't
-# assume. One StatefulSet hosts both Hydra's and Kratos's databases, same
-# role, no read replicas.
+# Hand-written (Bitnami's Postgres chart went paid; an operator is a cluster-wide prerequisite).
+# One StatefulSet hosts Hydra's and Kratos's databases.
 #
-# CAUTION: postgres:16-alpine only reads POSTGRES_PASSWORD, and only runs
-# /docker-entrypoint-initdb.d scripts (including the extra-database script
-# below), on first boot (when the data directory is empty).
-# - Rotating the secrets.postgres Secret's password afterward does NOT
-#   change the running Postgres's password — you must also run ALTER USER
-#   inside it, or Hydra's/Kratos's DSNs (both built from Secrets that embed
-#   this password) will stop authenticating.
-# - Adding a new name to postgres.extraDatabases after first boot does NOT
-#   create that database — the init script below never re-runs. Create it
-#   by hand (psql -c "CREATE DATABASE ...") instead.
-# Both are Postgres-on-Kubernetes properties, not something this chart can
-# enforce.
+# CAUTION: postgres:16-alpine reads POSTGRES_PASSWORD and runs initdb scripts (including the
+# extraDatabases one) only on first boot. Rotating the password later needs ALTER USER inside
+# Postgres, or the DSNs stop working; a new extraDatabases name needs CREATE DATABASE by hand.
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -67,7 +55,7 @@ metadata:
   annotations:
     bus.io/domain: {{ include "idp.domain" . | quote }}
 spec:
-  clusterIP: None   # headless: a StatefulSet's own DNS needs no load-balancing across 1 replica
+  clusterIP: None   # headless
   selector: { app.kubernetes.io/name: idp, app.kubernetes.io/component: postgres, app.kubernetes.io/instance: {{ .Release.Name }} }
   ports:
     - { name: postgres, port: 5432, targetPort: postgres }

@@ -47,9 +47,6 @@
           "title": "Email",
           "format": "email",
           "ory.sh/kratos": {
-            "verification": {
-              "via": "email"
-            },
             "recovery": {
               "via": "email"
             }

@@ -1,6 +1,6 @@
 apiVersion: v2
 name: idp
-description: Bus 2.0 IdP. Ory Hydra (OAuth2/OIDC) plus Ory Kratos (identity schema, bundled not yet wired), each with its own Postgres database.
+description: Bus 2.0 IdP. Ory Hydra (OAuth2/OIDC), a private Ory Kratos, and the login UI that fronts them, publishing user events to Kafka. Hydra and Kratos each have their own Postgres database.
 type: application
 version: 0.1.0
 appVersion: "2.3.0"

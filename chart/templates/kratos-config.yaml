@@ -1,0 +1,11 @@
+# Kratos config from config/kratos/ (shared with docker-compose), verbatim. Mounted at /etc/kratos.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "idp.kratosExtraName" . }}
+  labels: {{- include "idp.labels" . | nindent 4 }}
+data:
+  {{- range $path, $_ := .Files.Glob "config/kratos/*" }}
+  {{ base $path }}: |-
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
