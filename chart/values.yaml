@@ -9,7 +9,7 @@ secrets:
   postgres: { name: idp-postgres }
   hydra: { name: idp-hydra }         # keys: secretsSystem, secretsCookie
   kratos: { name: idp-kratos }       # keys: dsn, secretsDefault, secretsCookie, secretsCipher (32 bytes)
-  # keys: cookieSecret, emailTokenSecret.
+  # keys: cookieSecret, emailTokenSecret, inviteTokenSecret.
   ui: { name: idp-ui }
 
 # The login UI (../ui). image and kafka.brokers have no default: set them in helmvars/.
@@ -21,14 +21,15 @@ ui:
   apiAudience: bus-api        # `aud` API clients must request, and the API checks
   corsAllowedOrigins: []      # client web origins allowed to call the UI's bearer-token API
   fallbackUrl: ""             # optional (http/https): where an auth page opened directly redirects to; unset shows a 403 page
+  authzInternalUrl: http://authz:8081   # Authz's internal REST listener (../Authz); never its gateway route
   resources: {}
   ingress:
     enabled: true
     className: ""
     annotations: {}
     tlsSecretName: ""
-    # Never add /api/webhooks (Kratos -> UI, in-cluster only).
-    paths: [/oauth, /login, /registration, /verification, /recovery, /settings, /verify-email, /api/email-verification, /_next]
+    # Never add /api/webhooks or /api/internal (in-cluster only: Kratos, Authz).
+    paths: [/oauth, /login, /registration, /verification, /recovery, /settings, /company, /verify-email, /invite, /api/email-verification, /_next]
 
 # Every user event (USER_REGISTERED, ...) is published to this topic by the UI. Kafka is not part of this chart.
 kafka:

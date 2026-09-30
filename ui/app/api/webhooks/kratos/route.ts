@@ -1,4 +1,5 @@
 import { EVENTS, publishEvent, type EventName } from "@/lib/events";
+import { refusePublicHost } from "@/lib/internal";
 
 // The one webhook Kratos calls (hooks and courier). Body: { event, data }, shaped by
 // chart/config/kratos/*.jsonnet. Validates and publishes to Kafka; 5xx on failure so the
@@ -6,9 +7,8 @@ import { EVENTS, publishEvent, type EventName } from "@/lib/events";
 // UI's public host are refused.
 export async function POST(req: Request) {
   // Kratos calls the internal service name; refuse anything addressed to the public host.
-  if (req.headers.get("host") === new URL(process.env.PUBLIC_UI_URL ?? "http://invalid").host) {
-    return new Response("Forbidden", { status: 403 });
-  }
+  const refused = refusePublicHost(req);
+  if (refused) return refused;
 
   const body = await req.json().catch(() => null);
   const event = body?.event as EventName | null | undefined;

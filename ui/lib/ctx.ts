@@ -17,6 +17,7 @@ export type Ctx = {
   rcsrf?: string;    // recovery flow CSRF token
   sfl?: string;      // Kratos settings flow (new password after recovery)
   kj?: Record<string, string>; // Kratos cookie jar, ONLY during recovery -> settings
+  co?: true;         // signed in (password + phone done) through a provider app, but in no company yet
   flash?: Flash;
 };
 

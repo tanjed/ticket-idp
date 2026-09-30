@@ -37,6 +37,16 @@ sequenceDiagram
 - **Forgot password** sends a code by email, then lets the user set a new one.
 - **Email verification** is a signed link (not an OTP) that works from any device. After it, "Return to app" goes to the client's registered redirect URI.
 
+## Consumers and providers
+
+Each OAuth client is registered as `provider` or `consumer` (Hydra client `metadata.user_type`; anything else counts as `consumer`). The client, never the claims, decides the kind of token:
+
+- **Consumer** tokens carry `user_type: "consumer"` and nothing else from authorization. The gateway gives them the consumer permission set.
+- **Provider** tokens also carry `company_id` and `roles` (`[{id, name, version}]`), read from `../Authz` at login and again at consent. A provider login by someone in no company goes to **`/company`**, where they create one and become its administrator. Suspended company, or Authz unreachable: no provider token.
+- **Staff invitations**: a company admin invites a phone number through Authz, which asks the UI (`/api/internal/invitations`) to send the link (`USER_INVITED`). The link opens **`/invite`**: a new person creates their account there (phone already verified: the SMS proves it), someone with an account just joins.
+
+The APISIX gateway (`../APISIX`) verifies these tokens and authorizes every request from them; see `../Authz` for the design.
+
 ## Events
 
 Everything the IdP announces goes to **one Kafka topic, `idp.events`**, keyed by identity id, as `{id, event, occurred_at, source, data}`. A notification service (not in this repo) consumes it and sends the emails and SMS.
@@ -51,6 +61,7 @@ Everything the IdP announces goes to **one Kafka topic, `idp.events`**, keyed by
 | `USER_RESET_PASSWORD` | identity id, email, phone |
 | `USER_EMAIL_VERIFICATION_REQUEST` | identity id, email, **`verification_url`** |
 | `USER_EMAIL_VERIFICATION_SUCCESS` | identity id, email |
+| `USER_INVITED` | phone, company name, **`invite_url`** (send it by SMS) |
 
 Delivery is at-least-once for the events that carry a code (Kratos retries), and best effort for the rest. Consumers should de-duplicate on `id`.
 
@@ -93,7 +104,8 @@ The UI is configured by environment variables:
 | `CORS_ALLOWED_ORIGINS` | Client web origins allowed to call the UI's bearer-token API |
 | `UI_FALLBACK_URL` | Optional (http/https). Where an auth page opened without a sign-in in progress redirects to (e.g. the company site). Unset: a 403 "can't be opened directly" page |
 | `KAFKA_BROKERS`, `KAFKA_TOPIC_EVENTS` | Where events are published (`idp.events`) |
-| `UI_COOKIE_SECRET`, `EMAIL_TOKEN_SECRET` | Secrets (see Deploying) |
+| `AUTHZ_INTERNAL_URL` | Authz's internal REST listener (provider claims, company onboarding, invitations) |
+| `UI_COOKIE_SECRET`, `EMAIL_TOKEN_SECRET`, `INVITE_TOKEN_SECRET` | Secrets (see Deploying) |
 | `DEV_STATIC_OTP`, `DEV_LOG_EMAIL_LINKS` | **Local only.** Never set in a real environment |
 
 ## Repository layout
@@ -108,7 +120,7 @@ The UI is configured by environment variables:
 | `scripts/` | `add-client.sh`, used by `make add-client` |
 | `devspace.yaml` | Local Kubernetes dev workflow |
 
-Related repos in this workspace: `../Auth` (RBAC), `../Traefik` (gateway), `../TestClient` (throwaway OIDC client for testing).
+Related repos in this workspace: `../Authz` (authorization: roles, permissions, OPA bundles), `../APISIX` (gateway), `../TestClient` (throwaway OIDC client for testing).
 
 ## Deploying
 
@@ -125,7 +137,7 @@ The chart references **pre-created Secrets** and never creates them:
 | `idp-postgres` | `password`, `dsn` |
 | `idp-hydra` | `secretsSystem`, `secretsCookie` |
 | `idp-kratos` | `dsn`, `secretsDefault`, `secretsCookie`, `secretsCipher` (exactly 32 bytes) |
-| `idp-ui` | `cookieSecret`, `emailTokenSecret` |
+| `idp-ui` | `cookieSecret`, `emailTokenSecret`, `inviteTokenSecret` |
 
 Per environment, `helmvars/` sets the domain, Hydra's URLs, the UI image and `kafka.brokers` (Kafka is not part of the chart). Register OAuth2 clients with `make add-client`.
 

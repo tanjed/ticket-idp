@@ -12,5 +12,6 @@ ttl:
   access_token: 10m
   refresh_token: 720h
 oauth2:
-  # Hydra silently DROPS custom claims not listed here. These are set by the UI at consent.
-  allowed_top_level_claims: [email_verified, phone_number_verified]
+  # Hydra silently DROPS custom claims not listed here. These are set by the UI at consent
+  # (user_type, company_id and roles are what the APISIX gateway authorizes with).
+  allowed_top_level_claims: [email_verified, phone_number_verified, user_type, company_id, roles]

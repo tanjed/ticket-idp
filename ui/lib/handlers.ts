@@ -1,4 +1,5 @@
-import { acceptLogin } from "./hydra";
+import { getClaims } from "./authz";
+import { acceptLogin, getLoginRequest, userType } from "./hydra";
 import { activeFlash, clearCtx, getCtx, setCtx, type Ctx } from "./ctx";
 import { fieldMessages, type Flow } from "./flow";
 import { getIdentity, phoneVerified } from "./identity";
@@ -52,11 +53,34 @@ export async function backWithText(path: string, ctx: Ctx, text: string, type = 
   return to(path);
 }
 
-// Authenticated and phone-verified: accept the Hydra login and follow redirect_to.
+const expired = () =>
+  new Response("This sign-in request has expired. Please go back to your app and try again.", { status: 400 });
+
+// Authenticated and phone-verified: accept the Hydra login and follow redirect_to. Through a
+// provider app the user must also belong to a company (Authz); consent puts it in the token.
 export async function finishLogin(ctx: Ctx, sub: string): Promise<Response> {
   const identity = await getIdentity(sub);
   if (!identity || !phoneVerified(identity)) {
     return backWithText("/login", { ch: ctx.ch, exp: ctx.exp }, "Your mobile number is not verified.");
+  }
+  // The client decides the user type; read it from Hydra rather than trusting anything we stored.
+  const login = await getLoginRequest(ctx.ch).catch(() => null);
+  if (!login) {
+    await clearCtx();
+    return expired();
+  }
+  if (userType(login.client) === "provider") {
+    const claims = await getClaims(sub);
+    if (!claims.ok) {
+      const fresh = { ch: ctx.ch, exp: ctx.exp };
+      if (claims.status === 404) {
+        await setCtx({ ...fresh, sub, co: true });
+        return to("/company");
+      }
+      return backWithText("/login", fresh, claims.status === 403
+        ? "Your company's access is suspended. Please contact your company administrator."
+        : "Sign-in is unavailable right now. Please try again.");
+    }
   }
   try {
     const { redirect_to } = await acceptLogin(ctx.ch, { subject: sub, remember: true, remember_for: 3600 });
@@ -64,7 +88,7 @@ export async function finishLogin(ctx: Ctx, sub: string): Promise<Response> {
     return Response.redirect(redirect_to, 303);
   } catch {
     await clearCtx();
-    return new Response("This sign-in request has expired. Please go back to your app and try again.", { status: 400 });
+    return expired();
   }
 }
 

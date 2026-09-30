@@ -12,6 +12,7 @@ export const EVENTS = [
   "USER_MOBILE_VERIFICATION_SUCCESS",
   "USER_EMAIL_VERIFICATION_REQUEST", // link issued (data.verification_url: send it by email)
   "USER_EMAIL_VERIFICATION_SUCCESS",
+  "USER_INVITED", // staff invitation (data.invite_url: send it by SMS to data.phone)
 ] as const;
 export type EventName = (typeof EVENTS)[number];
 

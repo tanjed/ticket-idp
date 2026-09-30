@@ -35,3 +35,28 @@ export function claimsFor(i: Identity, scopes: string[]): Record<string, unknown
   }
   return claims;
 }
+
+// An invited staff member's identity, created through the admin API. The phone is marked verified:
+// the invite link was sent to it by SMS, so opening it proves control of the number.
+export async function createInvitedIdentity(
+  traits: { phone: string; email: string; name: { first: string; last: string } },
+  password: string,
+): Promise<{ ok: true; id: string } | { ok: false; status: number }> {
+  const res = await fetch(`${ADMIN}/admin/identities`, {
+    method: "POST",
+    cache: "no-store",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      schema_id: "default",
+      state: "active",
+      traits,
+      credentials: { password: { config: { password } } },
+      verifiable_addresses: [{ value: traits.phone, via: "sms", verified: true, status: "completed" }],
+    }),
+  });
+  if (!res.ok) {
+    console.error("[invite] identity not created:", res.status, (await res.text()).slice(0, 300));
+    return { ok: false, status: res.status };
+  }
+  return { ok: true, id: (await res.json()).id };
+}

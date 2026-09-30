@@ -142,6 +142,9 @@ services:
       KAFKA_BROKERS: idp-kafka:9092
       KAFKA_TOPIC_EVENTS: idp.events
       CORS_ALLOWED_ORIGINS: http://localhost:3002
+      # Authz (../Authz, internal REST): company and roles for provider tokens, onboarding, invitations.
+      AUTHZ_INTERNAL_URL: http://authz:8081
+      INVITE_TOKEN_SECRET: dev-invite-token-secret-change-me
       UI_FALLBACK_URL: http://localhost:3002   # where an auth page opened directly redirects to (unset: a 403 page)
     ports: ["3001:3001"]
 

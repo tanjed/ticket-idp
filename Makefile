@@ -3,7 +3,7 @@ network: ## create the shared docker network all repos here join (idempotent)
 	@docker network inspect shohoz >/dev/null 2>&1 || docker network create shohoz
 
 .PHONY: add-client
-add-client: ## Create or update an OAuth2 client (CLIENT_ID=... REDIRECT_URI=... USER_TYPE=staff|consumer|client [SECRET=...] [SCOPE=...] [AUDIENCE=...])
+add-client: ## Create or update an OAuth2 client (CLIENT_ID=... REDIRECT_URI=... USER_TYPE=provider|consumer [SECRET=...] [SCOPE=...] [AUDIENCE=...])
 	@./scripts/add-client.sh
 
 .PHONY: lint
