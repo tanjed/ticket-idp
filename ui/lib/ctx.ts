@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
-import { COOKIE, open, seal } from "./ctx-cookie";
+import { Config } from "./config";
+import { COOKIE, CookieCipher } from "./ctx-cookie";
+import { inject, singleton } from "./di";
 import type { FieldMessages } from "./flow";
 
 // The UI's only per-user state: an encrypted httpOnly cookie tying a browser to one Hydra
@@ -24,24 +26,34 @@ export type Ctx = {
 const TTL_MS = 30 * 60 * 1000;
 const FLASH_MS = 60 * 1000;
 
-export async function getCtx(): Promise<Ctx | null> {
-  const v = (await cookies()).get(COOKIE)?.value;
-  return v ? open<Ctx>(v) : null;
-}
+@singleton()
+export class ContextStore {
+  constructor(
+    @inject(CookieCipher) private readonly cipher: CookieCipher,
+    @inject(Config) private readonly config: Config,
+  ) {}
 
-export async function setCtx(ctx: Omit<Ctx, "exp"> & { exp?: number }) {
-  (await cookies()).set(COOKIE, seal({ ...ctx, exp: ctx.exp ?? Date.now() + TTL_MS }), {
-    httpOnly: true,
-    sameSite: "lax", // also the CSRF defence: cross-site POSTs arrive without it
-    secure: (process.env.PUBLIC_UI_URL ?? "").startsWith("https://"),
-    path: "/",
-    maxAge: TTL_MS / 1000,
-  });
-}
+  async get(): Promise<Ctx | null> {
+    const v = (await cookies()).get(COOKIE)?.value;
+    return v ? this.cipher.open<Ctx>(v) : null;
+  }
 
-export async function clearCtx() {
-  (await cookies()).delete(COOKIE);
-}
+  async set(ctx: Omit<Ctx, "exp"> & { exp?: number }) {
+    (await cookies()).set(COOKIE, this.cipher.seal({ ...ctx, exp: ctx.exp ?? Date.now() + TTL_MS }), {
+      httpOnly: true,
+      sameSite: "lax", // also the CSRF defence: cross-site POSTs arrive without it
+      secure: this.config.secureCookies,
+      path: "/",
+      maxAge: TTL_MS / 1000,
+    });
+  }
 
-export const activeFlash = (ctx: Ctx | null): Flash | undefined =>
-  ctx?.flash && Date.now() - ctx.flash.at < FLASH_MS ? ctx.flash : undefined;
+  async clear() {
+    (await cookies()).delete(COOKIE);
+  }
+
+  // The flash message, if it is recent enough to show.
+  flash(ctx: Ctx | null): Flash | undefined {
+    return ctx?.flash && Date.now() - ctx.flash.at < FLASH_MS ? ctx.flash : undefined;
+  }
+}

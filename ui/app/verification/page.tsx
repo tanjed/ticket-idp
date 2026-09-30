@@ -1,8 +1,9 @@
 import Blocked from "@/components/blocked";
 import StatusPage from "@/components/status-page";
 import { Errors, Field } from "@/components/fields";
-import { activeFlash, getCtx } from "@/lib/ctx";
-import { getFlow } from "@/lib/kratos-api";
+import { ContextStore } from "@/lib/ctx";
+import { container } from "@/lib/di";
+import { KratosPublic } from "@/lib/kratos-api";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +11,11 @@ const mask = (phone: string) => `${phone.slice(0, 5)}••••${phone.slice(-
 
 // Phone OTP screen: after registration, or a correct password with an unverified phone.
 export default async function Verification() {
-  const ctx = await getCtx();
+  const store = container.resolve(ContextStore);
+  const ctx = await store.get();
   if (!ctx?.vfl || !ctx.phone) return <Blocked />;
 
-  const flow = await getFlow("verification", ctx.vfl);
+  const flow = await container.resolve(KratosPublic).getFlow("verification", ctx.vfl);
   if (!flow.ok) {
     return (
       <StatusPage tone="clock" title="OTP expired" action={{ href: "/login", label: "Log in again" }}>
@@ -21,7 +23,7 @@ export default async function Verification() {
       </StatusPage>
     );
   }
-  const f = activeFlash(ctx);
+  const f = store.flash(ctx);
 
   return (
     <main className="page">

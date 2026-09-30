@@ -55,7 +55,7 @@ The config in `chart/config/` is the only copy, used as is by docker-compose (bi
 Events are the contract with the notification service and anything else that consumes `idp.events`.
 
 1. Add the name to `EVENTS` in `ui/lib/events.ts`.
-2. Publish it with `publishEvent` from the UI, **or**, if Kratos is the source, add a `chart/config/kratos/<name>.jsonnet` body template and a hook in `selfservice.yaml`. The Kratos-originated ones all go through the one webhook route.
+2. Publish it with `EventPublisher.publish` (injected) from the UI, **or**, if Kratos is the source, add a `chart/config/kratos/<name>.jsonnet` body template and a hook in `selfservice.yaml`. The Kratos-originated ones all go through the one webhook route.
 3. Keep the payload small and free of secrets. It may carry a one-time code where the consumer must send it (OTP, recovery), and nothing else sensitive.
 4. Document it in the README's event table.
 

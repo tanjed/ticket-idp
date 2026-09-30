@@ -1,18 +1,24 @@
+import { Config } from "./config";
+import { inject, singleton } from "./di";
+import { KratosAdmin } from "./identity";
+
 // LOCAL DEV ONLY: with DEV_STATIC_OTP set, that code is swapped for the real one Kratos
 // queued (Kratos can't use a fixed code).
-const STATIC = process.env.DEV_STATIC_OTP;
-const ADMIN = process.env.KRATOS_ADMIN_URL ?? "http://localhost:4434";
+@singleton()
+export class DevOtp {
+  constructor(
+    @inject(Config) private readonly config: Config,
+    @inject(KratosAdmin) private readonly admin: KratosAdmin,
+  ) {}
 
-export async function resolveOtp(code: string): Promise<string> {
-  if (!STATIC || code !== STATIC) return code;
-  try {
-    const list = await fetch(`${ADMIN}/admin/courier/messages?page_size=20`, { cache: "no-store" });
-    const msgs: { id: string; template_type: string }[] = await list.json();
-    const m = msgs.find((x) => /^(verification|recovery)_code/.test(x.template_type));
-    if (!m) return code;
-    const res = await fetch(`${ADMIN}/admin/courier/messages/${m.id}`, { cache: "no-store" });
-    return ((await res.json()).body ?? "").match(/\b\d{6}\b/)?.[0] ?? code;
-  } catch {
-    return code;
+  async resolve(code: string): Promise<string> {
+    if (!this.config.devStaticOtp || code !== this.config.devStaticOtp) return code;
+    try {
+      const m = (await this.admin.courierMessages()).find((x) => /^(verification|recovery)_code/.test(x.template_type));
+      if (!m) return code;
+      return ((await this.admin.courierMessage(m.id)).body ?? "").match(/\b\d{6}\b/)?.[0] ?? code;
+    } catch {
+      return code;
+    }
   }
 }

@@ -1,13 +1,15 @@
 import Blocked from "@/components/blocked";
 import { Errors, Field, PasswordField } from "@/components/fields";
-import { activeFlash, getCtx } from "@/lib/ctx";
+import { ContextStore } from "@/lib/ctx";
+import { container } from "@/lib/di";
 
 export const dynamic = "force-dynamic";
 
 export default async function Login() {
-  const ctx = await getCtx();
+  const store = container.resolve(ContextStore);
+  const ctx = await store.get();
   if (!ctx) return <Blocked />;
-  const f = activeFlash(ctx);
+  const f = store.flash(ctx);
 
   return (
     <main className="page">

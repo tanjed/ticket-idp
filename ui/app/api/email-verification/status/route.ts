@@ -1,14 +1,7 @@
-import { authenticate, json, preflight } from "@/lib/api";
-import { emailVerified, getIdentity } from "@/lib/identity";
+import { container } from "@/lib/di";
+import { EmailVerificationApiController } from "@/lib/controllers/email-verification-api";
 
-export const OPTIONS = preflight;
+const api = () => container.resolve(EmailVerificationApiController);
 
-// Live state, so a client needn't wait for a new ID token.
-export async function GET(req: Request) {
-  const caller = await authenticate(req);
-  if (!caller) return json(req, { error: "invalid_token" }, 401, { "www-authenticate": "Bearer" });
-
-  const identity = await getIdentity(caller.sub);
-  if (!identity) return json(req, { error: "unknown_user" }, 404);
-  return json(req, { email: identity.traits.email, email_verified: emailVerified(identity) });
-}
+export const OPTIONS = (req: Request) => api().options(req);
+export const GET = (req: Request) => api().status(req);

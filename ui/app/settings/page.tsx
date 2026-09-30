@@ -1,14 +1,16 @@
 import Blocked from "@/components/blocked";
 import { Errors, PasswordField } from "@/components/fields";
-import { activeFlash, getCtx } from "@/lib/ctx";
+import { ContextStore } from "@/lib/ctx";
+import { container } from "@/lib/di";
 
 export const dynamic = "force-dynamic";
 
 // Only reachable after a successful recovery code.
 export default async function Settings() {
-  const ctx = await getCtx();
+  const store = container.resolve(ContextStore);
+  const ctx = await store.get();
   if (!ctx?.kj || !ctx.sfl) return <Blocked />;
-  const f = activeFlash(ctx);
+  const f = store.flash(ctx);
 
   return (
     <main className="page">

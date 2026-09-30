@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Kafka, Partitioners, type Producer } from "kafkajs";
+import { Config } from "./config";
+import { inject, singleton } from "./di";
 
 // Every user event goes to one Kafka topic, published by the UI backend:
 //   { id, event, occurred_at, source, data }   key = data.identity_id
@@ -16,35 +18,40 @@ export const EVENTS = [
 ] as const;
 export type EventName = (typeof EVENTS)[number];
 
-export const TOPIC = process.env.KAFKA_TOPIC_EVENTS ?? "idp.events";
-
+// The producer outlives module reloads in dev (one connection per process).
 const g = globalThis as unknown as { __producer?: Promise<Producer> };
 
-function producer(): Promise<Producer> {
-  if (!g.__producer) {
-    const kafka = new Kafka({
-      clientId: process.env.KAFKA_CLIENT_ID ?? "idp-ui",
-      brokers: (process.env.KAFKA_BROKERS ?? "localhost:19092").split(","),
-      connectionTimeout: 3000,
-      requestTimeout: 5000,
-      retry: { retries: 5 },
-    });
-    const p = kafka.producer({ idempotent: true, maxInFlightRequests: 1, createPartitioner: Partitioners.DefaultPartitioner });
-    g.__producer = p.connect().then(() => p).catch((e) => {
-      g.__producer = undefined; // try again on the next publish
-      throw e;
-    });
-  }
-  return g.__producer;
-}
+// The only Kafka producer.
+@singleton()
+export class EventPublisher {
+  constructor(@inject(Config) private readonly config: Config) {}
 
-export async function publishEvent(event: EventName, data: Record<string, unknown>): Promise<void> {
-  const key = String(data.identity_id ?? data.recipient ?? "");
-  const value = JSON.stringify({ id: randomUUID(), event, occurred_at: new Date().toISOString(), source: "idp-ui", data });
-  try {
-    await (await producer()).send({ topic: TOPIC, acks: -1, messages: [{ key, value, headers: { event } }] });
-  } catch (e) {
-    g.__producer = undefined; // drop a possibly broken connection
-    throw e;
+  private producer(): Promise<Producer> {
+    if (!g.__producer) {
+      const kafka = new Kafka({
+        clientId: this.config.kafkaClientId,
+        brokers: this.config.kafkaBrokers,
+        connectionTimeout: 3000,
+        requestTimeout: 5000,
+        retry: { retries: 5 },
+      });
+      const p = kafka.producer({ idempotent: true, maxInFlightRequests: 1, createPartitioner: Partitioners.DefaultPartitioner });
+      g.__producer = p.connect().then(() => p).catch((e) => {
+        g.__producer = undefined; // try again on the next publish
+        throw e;
+      });
+    }
+    return g.__producer;
+  }
+
+  async publish(event: EventName, data: Record<string, unknown>): Promise<void> {
+    const key = String(data.identity_id ?? data.recipient ?? "");
+    const value = JSON.stringify({ id: randomUUID(), event, occurred_at: new Date().toISOString(), source: "idp-ui", data });
+    try {
+      await (await this.producer()).send({ topic: this.config.kafkaTopic, acks: -1, messages: [{ key, value, headers: { event } }] });
+    } catch (e) {
+      g.__producer = undefined; // drop a possibly broken connection
+      throw e;
+    }
   }
 }

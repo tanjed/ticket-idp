@@ -1,8 +1,9 @@
 import StatusPage from "@/components/status-page";
 import { Errors, Field, PasswordField } from "@/components/fields";
-import { getInvitation } from "@/lib/authz";
-import { verifyInviteToken } from "@/lib/invite-token";
-import { identityIdByPhone } from "@/lib/kratos-api";
+import { AuthzClient } from "@/lib/authz";
+import { container } from "@/lib/di";
+import { KratosAdmin } from "@/lib/identity";
+import { InviteTokens } from "@/lib/invite-token";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ const ERRORS: Record<string, string> = {
 // creates their account here; someone who already has one just joins.
 export default async function Invite({ searchParams }: { searchParams: Promise<{ token?: string; e?: string }> }) {
   const { token, e } = await searchParams;
-  const result = token ? verifyInviteToken(token) : ({ ok: false, reason: "invalid" } as const);
+  const result = token ? container.resolve(InviteTokens).verify(token) : ({ ok: false, reason: "invalid" } as const);
   const invalid = (
     <StatusPage tone="alert" title="Invitation not valid">
       {!result.ok && result.reason === "expired"
@@ -28,7 +29,7 @@ export default async function Invite({ searchParams }: { searchParams: Promise<{
   );
   if (!result.ok || !token) return invalid;
 
-  const inv = await getInvitation(result.payload.iid);
+  const inv = await container.resolve(AuthzClient).getInvitation(result.payload.iid);
   if (!inv.ok) {
     if (inv.status === 404) return invalid;
     return <StatusPage tone="alert" title="Something went wrong">Please try again in a moment.</StatusPage>;
@@ -46,7 +47,7 @@ export default async function Invite({ searchParams }: { searchParams: Promise<{
     return <StatusPage tone="clock" title="Invitation expired">Ask your company administrator for a new one.</StatusPage>;
   }
 
-  const existing = await identityIdByPhone(phone);
+  const existing = await container.resolve(KratosAdmin).identityIdByPhone(phone);
   const errors = e && ERRORS[e] ? [{ id: 0, text: ERRORS[e], type: "error" }] : [];
 
   return (
