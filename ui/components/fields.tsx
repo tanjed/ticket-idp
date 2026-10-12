@@ -15,10 +15,10 @@ export function Errors({ messages, label }: { messages: Message[]; label?: strin
 }
 
 export function Field({
-  name, label, type = "text", placeholder, defaultValue, errors = [], autoComplete,
+  name, label, type = "text", placeholder, defaultValue, errors = [], autoComplete, maxLength,
 }: {
   name: string; label: string; type?: string; placeholder: string;
-  defaultValue?: string; errors?: Message[]; autoComplete?: string;
+  defaultValue?: string; errors?: Message[]; autoComplete?: string; maxLength?: number;
 }) {
   return (
     <div className="field">
@@ -26,7 +26,7 @@ export function Field({
       <input
         className="input" id={name} name={name} type={type} required
         placeholder={placeholder} defaultValue={defaultValue}
-        autoComplete={autoComplete} aria-invalid={errors.length > 0}
+        autoComplete={autoComplete} maxLength={maxLength} aria-invalid={errors.length > 0}
       />
       <Errors messages={errors} label={label} />
     </div>

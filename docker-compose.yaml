@@ -1,5 +1,5 @@
 # Local stack: Postgres (hydra + kratos databases), Hydra, Kratos (private), Kafka (Redpanda), the UI.
-#   docker compose up -d --build   # then run ../TestClient to try a login (local OTP: 123456)
+#   docker compose up -d --build   # then run ../ProviderUI to try a login (local OTP: 123456)
 # Ports: Hydra public 4444, UI 3001; Hydra admin 4445, Postgres 5432 and Kafka 19092 on loopback.
 # Hydra's ports match ../Traefik's stack and the Authorization Service's: don't run them together.
 # Runs on the external `shohoz` network (make network).
@@ -141,11 +141,13 @@ services:
       # Events (ui/lib/events.ts): every domain event goes to one Kafka topic.
       KAFKA_BROKERS: idp-kafka:9092
       KAFKA_TOPIC_EVENTS: idp.events
-      CORS_ALLOWED_ORIGINS: http://localhost:3002
-      # Authz (../Authz, internal REST): company and roles for provider tokens, onboarding, invitations.
+      CORS_ALLOWED_ORIGINS: http://localhost:3003
+      # Authz (../Authz, internal REST): company and roles for provider tokens.
       AUTHZ_INTERNAL_URL: http://authz:8081
+      # Company (../Company, internal REST): company onboarding and staff invitations.
+      COMPANY_INTERNAL_URL: http://company:8081
       INVITE_TOKEN_SECRET: dev-invite-token-secret-change-me
-      UI_FALLBACK_URL: http://localhost:3002   # where an auth page opened directly redirects to (unset: a 403 page)
+      UI_FALLBACK_URL: http://localhost:3003   # where an auth page opened directly redirects to (unset: a 403 page)
     ports: ["3001:3001"]
 
 # First boot only: one role (hydra) and two databases, hydra (POSTGRES_DB) and kratos.
@@ -155,7 +157,7 @@ configs:
     content: |
       CREATE DATABASE kratos OWNER hydra;
 
-# Every service runs on the external `shohoz` network, shared by the repos here (IdP, TestClient,
+# Every service runs on the external `shohoz` network, shared by the repos here (IdP, ProviderUI,
 # Traefik). Create it once: make network. Docker DNS aliases a service name on every network, so
 # names must stay unique across those repos (hence idp-hydra, idp-ui, idp-kafka).
 networks:

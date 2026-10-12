@@ -1,4 +1,5 @@
 import { AuthzClient } from "./authz";
+import { CompanyClient } from "./company";
 import { ContextStore, type Ctx } from "./ctx";
 import { inject, singleton } from "./di";
 import { FlowResponder } from "./handlers";
@@ -14,6 +15,7 @@ export class LoginService {
     @inject(KratosAdmin) private readonly kratos: KratosAdmin,
     @inject(HydraAdmin) private readonly hydra: HydraAdmin,
     @inject(AuthzClient) private readonly authz: AuthzClient,
+    @inject(CompanyClient) private readonly company: CompanyClient,
     @inject(ContextStore) private readonly store: ContextStore,
     @inject(FlowResponder) private readonly respond: FlowResponder,
   ) {}
@@ -32,7 +34,19 @@ export class LoginService {
       return expired();
     }
     if (userType(login.client) === "provider") {
-      const claims = await this.authz.getClaims(sub);
+      let claims = await this.authz.getClaims(sub);
+      if (!claims.ok && claims.status === 404 && ctx.cn) {
+        // Provider signup: the company name rode in the encrypted context; create the company now
+        // that the phone is verified, then read the claims again (Authz asks Company). Any failure
+        // lands on /company with the name prefilled; submitting it again is idempotent and
+        // finishes a half-made company. The pending name leaves the context here.
+        const made = await this.provision(ctx.cn, sub);
+        if (made.ok) claims = made;
+        else {
+          return this.respond.backWithText("/company", { ch: ctx.ch, exp: ctx.exp, sub, co: true },
+            "Your company could not be created right now. Please try again.", "error", undefined, { company: ctx.cn });
+        }
+      }
       if (!claims.ok) {
         const fresh = { ch: ctx.ch, exp: ctx.exp };
         if (claims.status === 404) {
@@ -52,5 +66,19 @@ export class LoginService {
       await this.store.clear();
       return expired();
     }
+  }
+
+  // Create the company, then fetch the claims. Both are retried once: Company answers
+  // "unavailable" when Authz could not finish the setup (calling again finishes it), and Authz's
+  // claims fail while the company is still pending.
+  private async provision(name: string, sub: string) {
+    let created = await this.company.createCompany(name, sub);
+    if (!created.ok && (created.reason === "unavailable" || created.status === 0 || created.status >= 500)) {
+      created = await this.company.createCompany(name, sub);
+    }
+    if (!created.ok) return created;
+    let claims = await this.authz.getClaims(sub);
+    if (!claims.ok && claims.status !== 404) claims = await this.authz.getClaims(sub);
+    return claims;
   }
 }

@@ -24,6 +24,7 @@ export class Config {
   readonly kafkaTopic = process.env.KAFKA_TOPIC_EVENTS ?? "idp.events";
   readonly kafkaClientId = process.env.KAFKA_CLIENT_ID ?? "idp-ui";
   readonly authzInternalUrl = process.env.AUTHZ_INTERNAL_URL ?? "http://localhost:8091";
+  readonly companyInternalUrl = process.env.COMPANY_INTERNAL_URL ?? "http://localhost:8097";
   // LOCAL DEV ONLY (docker-compose): never set in the chart.
   readonly devStaticOtp = process.env.DEV_STATIC_OTP;
   readonly devLogLinks = !!process.env.DEV_LOG_EMAIL_LINKS;

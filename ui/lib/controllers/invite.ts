@@ -1,4 +1,4 @@
-import { AuthzClient } from "../authz";
+import { CompanyClient } from "../company";
 import { inject, singleton } from "../di";
 import { EventPublisher } from "../events";
 import { FlowResponder, str } from "../handlers";
@@ -11,7 +11,7 @@ import { InviteTokens } from "../invite-token";
 export class InviteController {
   constructor(
     @inject(FlowResponder) private readonly respond: FlowResponder,
-    @inject(AuthzClient) private readonly authz: AuthzClient,
+    @inject(CompanyClient) private readonly company: CompanyClient,
     @inject(KratosAdmin) private readonly admin: KratosAdmin,
     @inject(InviteTokens) private readonly tokens: InviteTokens,
     @inject(EventPublisher) private readonly events: EventPublisher,
@@ -26,7 +26,7 @@ export class InviteController {
     const v = this.tokens.verify(token);
     if (!v.ok) return back();
     const { iid, phone } = v.payload;
-    const inv = await this.authz.getInvitation(iid);
+    const inv = await this.company.getInvitation(iid);
     if (!inv.ok || inv.body.status !== "INVITATION_STATUS_PENDING" || inv.body.phone !== phone) return back();
 
     let sub = await this.admin.identityIdByPhone(phone);
@@ -41,10 +41,12 @@ export class InviteController {
       created = { first, last, email };
     }
 
-    const acc = await this.authz.acceptInvitation(iid, sub);
+    const acc = await this.company.acceptInvitation(iid, sub);
     if (!acc.ok) {
       // A new account stays (it can sign in to consumer apps); the page says what went wrong.
       if (acc.reason === "already_member") return back("member");
+      // Used, expired or revoked meanwhile: the page shows the invitation's own state.
+      if (acc.reason === "expired" || acc.reason === "revoked" || acc.reason === "not_found") return back();
       if (acc.reason !== "already_accepted") return back("accept");
     }
 

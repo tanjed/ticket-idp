@@ -10,5 +10,6 @@ hydra:
         post_logout_redirect: https://login.bus.example/signed-out
 ui:
   image: { repository: registry.bus.example/idp-ui, tag: "0.1.0" }   # PLACEHOLDER: the image built from ui/
+  companyInternalUrl: http://company:8081   # Company's internal REST listener (../Company)
 kafka:
   brokers: kafka.bus.example:9092                          # PLACEHOLDER: this environment's Kafka

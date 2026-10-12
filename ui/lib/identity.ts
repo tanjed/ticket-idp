@@ -53,6 +53,15 @@ export class KratosAdmin {
     return Array.isArray(body) && body[0]?.id ? body[0].id : null;
   }
 
+  // Identities for a set of ids (Kratos filters server-side; unknown ids are simply absent).
+  // null on a Kratos failure, so the caller can answer 502 instead of "no such users".
+  async identitiesByIds(ids: string[]): Promise<Identity[] | null> {
+    const q = ids.map((i) => `ids=${encodeURIComponent(i)}`).join("&");
+    const res = await fetch(this.url(`/identities?page_size=${Math.max(ids.length, 1)}&${q}`), { cache: "no-store" });
+    const body = res.ok ? await res.json() : null;
+    return Array.isArray(body) ? body : null;
+  }
+
   // Replaces metadata_public (JSON patch "add" on the whole object).
   async setMetadataPublic(id: string, value: Record<string, unknown>): Promise<boolean> {
     const res = await fetch(this.url(`/identities/${encodeURIComponent(id)}`), {

@@ -31,7 +31,8 @@ export class OAuthController {
       return Response.redirect(redirect_to, 303);
     }
 
-    await this.store.set({ ch: challenge });
+    // Provider apps: the signup also collects a company name (the client decides, see userType).
+    await this.store.set({ ch: challenge, ...(userType(login.client) === "provider" && { pv: true as const }) });
     const signup = new URL(login.request_url).searchParams.get("screen_hint") === "signup";
     return this.respond.to(signup ? "/registration" : "/login");
   }
@@ -63,6 +64,7 @@ export class OAuthController {
       }
       accessToken.company_id = claims.body.company_id;
       accessToken.roles = claims.body.roles;
+      accessToken.authz_version = Number(claims.body.authz_version);
     }
 
     const { redirect_to } = await this.hydra.acceptConsent(challenge, {

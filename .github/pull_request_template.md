@@ -13,7 +13,7 @@ There is no CI or automated suite yet, so say what you ran.
 - [ ] `ui/` changed: `cd ui && npx tsc --noEmit && npm run build` pass
 - [ ] `chart/` or `helmvars/` changed: `make lint template` pass
 - [ ] `chart/config/` changed: services restarted and healthy (`docker compose restart kratos idp-hydra`)
-- [ ] A flow changed (login, signup, OTP, recovery, email): walked through `../TestClient`, and the expected events reached `idp.events`
+- [ ] A flow changed (login, signup, OTP, recovery, email): walked through `../ProviderUI`, and the expected events reached `idp.events`
 - [ ] Anything not run locally is listed below
 
 <!-- Note what you could not run. -->

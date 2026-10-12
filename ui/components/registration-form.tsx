@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Errors, Field, PasswordField } from "./fields";
 import type { Flash } from "@/lib/ctx";
 
-export default function RegistrationForm({ flash }: { flash?: Flash }) {
+// provider: the client is a provider app, so the signup also names the company to create.
+export default function RegistrationForm({ flash, provider = false }: { flash?: Flash; provider?: boolean }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const mismatch = confirm !== "" && confirm !== password;
@@ -41,6 +42,11 @@ export default function RegistrationForm({ flash }: { flash?: Flash }) {
         </div>
         <Errors messages={e("traits.gender") ?? []} label="Gender" />
       </div>
+
+      {provider && (
+        <Field name="company" label="Company name" placeholder="Enter your company name"
+          defaultValue={v("company")} errors={e("company")} autoComplete="organization" maxLength={100} />
+      )}
 
       <PasswordField name="password" label="Password" value={password} onChange={setPassword}
         errors={e("password")} autoComplete="new-password" />

@@ -10,7 +10,7 @@ set -euo pipefail
 : "${USER_TYPE:?USER_TYPE is required (provider or consumer)}"
 case "$USER_TYPE" in provider|consumer) ;; *) echo "USER_TYPE must be provider or consumer" >&2; exit 1 ;; esac
 SCOPE="${SCOPE:-openid offline_access}"
-# The gateway (OPA) accepts tokens for bus-api; user_type decides consumer or provider rules.
+# The gateway accepts tokens for bus-api; user_type decides consumer or provider rules.
 AUDIENCE="${AUDIENCE:-bus-api}"
 
 status=$(curl -s -o /dev/null -w '%{http_code}' "$HYDRA_ADMIN_URL/admin/clients/$CLIENT_ID")

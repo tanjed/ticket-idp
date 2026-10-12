@@ -1,6 +1,6 @@
 import StatusPage from "@/components/status-page";
 import { Errors, Field, PasswordField } from "@/components/fields";
-import { AuthzClient } from "@/lib/authz";
+import { CompanyClient } from "@/lib/company";
 import { container } from "@/lib/di";
 import { KratosAdmin } from "@/lib/identity";
 import { InviteTokens } from "@/lib/invite-token";
@@ -29,7 +29,7 @@ export default async function Invite({ searchParams }: { searchParams: Promise<{
   );
   if (!result.ok || !token) return invalid;
 
-  const inv = await container.resolve(AuthzClient).getInvitation(result.payload.iid);
+  const inv = await container.resolve(CompanyClient).getInvitation(result.payload.iid);
   if (!inv.ok) {
     if (inv.status === 404) return invalid;
     return <StatusPage tone="alert" title="Something went wrong">Please try again in a moment.</StatusPage>;
@@ -42,6 +42,9 @@ export default async function Invite({ searchParams }: { searchParams: Promise<{
         You have joined {company}. Sign in through your company&apos;s app with your mobile number.
       </StatusPage>
     );
+  }
+  if (status === "INVITATION_STATUS_REVOKED") {
+    return <StatusPage tone="alert" title="Invitation cancelled">This invitation was cancelled. Ask your company administrator for a new one.</StatusPage>;
   }
   if (status !== "INVITATION_STATUS_PENDING") {
     return <StatusPage tone="clock" title="Invitation expired">Ask your company administrator for a new one.</StatusPage>;

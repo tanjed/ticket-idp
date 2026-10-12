@@ -17,7 +17,7 @@ export default async function Registration() {
         Create your account once and enjoy a seamless journey across all Shohoz
         services. One account for all your travel needs.
       </p>
-      <RegistrationForm flash={store.flash(ctx)} />
+      <RegistrationForm flash={store.flash(ctx)} provider={!!ctx.pv} />
     </main>
   );
 }

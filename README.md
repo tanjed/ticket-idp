@@ -42,8 +42,8 @@ sequenceDiagram
 Each OAuth client is registered as `provider` or `consumer` (Hydra client `metadata.user_type`; anything else counts as `consumer`). The client, never the claims, decides the kind of token:
 
 - **Consumer** tokens carry `user_type: "consumer"` and nothing else from authorization. The gateway gives them the consumer permission set.
-- **Provider** tokens also carry `company_id` and `roles` (`[{id, name, version}]`), read from `../Authz` at login and again at consent. A provider login by someone in no company goes to **`/company`**, where they create one and become its administrator. Suspended company, or Authz unreachable: no provider token.
-- **Staff invitations**: a company admin invites a phone number through Authz, which asks the UI (`/api/internal/invitations`) to send the link (`USER_INVITED`). The link opens **`/invite`**: a new person creates their account there (phone already verified: the SMS proves it), someone with an account just joins.
+- **Provider** tokens also carry `company_id` and `roles` (`[{id, name, version}]`), read from `../Authz` at login and again at consent. Companies and invitations belong to `../Company`. Registering through a provider app asks for a **company name** (kept in the encrypted context cookie, not in Kratos); once the phone OTP passes, the UI creates the company in Company (the registrant becomes its administrator) and then reads the claims. If that fails, or a provider login is by someone in no company (e.g. removed staff), they land on **`/company`** (name prefilled) to create one. Suspended company, or Authz unreachable: no provider token.
+- **Staff invitations**: a company admin invites a phone number through Company, which asks the UI (`/api/internal/invitations`) to send the link (`USER_INVITED`). The link opens **`/invite`** (the UI reads and accepts the invitation through Company; revoked, expired and used invitations are reported): a new person creates their account there (phone already verified: the SMS proves it), someone with an account just joins.
 
 The APISIX gateway (`../APISIX`) verifies these tokens and authorizes every request from them; see `../Authz` for the design.
 
@@ -74,7 +74,7 @@ make network                 # once: creates the shared docker network
 docker compose up -d --build # Postgres, Hydra, Kratos, Kafka (Redpanda), the UI
 ```
 
-To try a real login, run the throwaway OIDC client in `../TestClient` (a separate repo) and open <http://localhost:3002>.
+To try a real login, run the provider panel in `../ProviderUI` (a separate repo) and open <http://localhost:3003>.
 
 | Service | URL |
 |---|---|
@@ -104,7 +104,8 @@ The UI is configured by environment variables:
 | `CORS_ALLOWED_ORIGINS` | Client web origins allowed to call the UI's bearer-token API |
 | `UI_FALLBACK_URL` | Optional (http/https). Where an auth page opened without a sign-in in progress redirects to (e.g. the company site). Unset: a 403 "can't be opened directly" page |
 | `KAFKA_BROKERS`, `KAFKA_TOPIC_EVENTS` | Where events are published (`idp.events`) |
-| `AUTHZ_INTERNAL_URL` | Authz's internal REST listener (provider claims, company onboarding, invitations) |
+| `AUTHZ_INTERNAL_URL` | Authz's internal REST listener (provider claims) |
+| `COMPANY_INTERNAL_URL` | Company's internal REST listener (company creation, invitations) |
 | `UI_COOKIE_SECRET`, `EMAIL_TOKEN_SECRET`, `INVITE_TOKEN_SECRET` | Secrets (see Deploying) |
 | `DEV_STATIC_OTP`, `DEV_LOG_EMAIL_LINKS` | **Local only.** Never set in a real environment |
 
@@ -120,7 +121,7 @@ The UI is configured by environment variables:
 | `scripts/` | `add-client.sh`, used by `make add-client` |
 | `devspace.yaml` | Local Kubernetes dev workflow |
 
-Related repos in this workspace: `../Authz` (authorization: roles, permissions, OPA bundles), `../APISIX` (gateway), `../TestClient` (throwaway OIDC client for testing).
+Related repos in this workspace: `../Authz` (authorization: roles, permissions, and the gateway view in Redis), `../APISIX` (gateway), `../ProviderUI` (the provider panel, an OIDC provider client).
 
 ## Deploying
 

@@ -1,4 +1,4 @@
-import { AuthzClient } from "../authz";
+import { CompanyClient } from "../company";
 import { ContextStore } from "../ctx";
 import { DevOtp } from "../dev-otp";
 import { inject, singleton } from "../di";
@@ -9,6 +9,8 @@ import { KratosAdmin } from "../identity";
 import { KratosPublic } from "../kratos-api";
 import { csrfOf, KratosBrowser } from "../kratos-browser";
 import { LoginService } from "../login";
+
+const validCompanyName = (n: string) => n.length > 0 && [...n].length <= 100;
 
 // The auth pages' form POSTs: login, registration, phone OTP, recovery, new password, company.
 // Every one needs the context cookie (FlowResponder.guard).
@@ -22,7 +24,7 @@ export class AuthController {
     @inject(KratosBrowser) private readonly browser: KratosBrowser,
     @inject(DevOtp) private readonly otp: DevOtp,
     @inject(EmailVerification) private readonly emails: EmailVerification,
-    @inject(AuthzClient) private readonly authz: AuthzClient,
+    @inject(CompanyClient) private readonly company: CompanyClient,
     @inject(LoginService) private readonly login: LoginService,
   ) {}
 
@@ -74,10 +76,21 @@ export class AuthController {
       gender: str(form.get("traits.gender")),
     };
     // Re-shown after an error (never the password).
-    const values = {
+    const values: Record<string, string> = {
       "traits.name.first": traits.name.first, "traits.name.last": traits.name.last,
       "traits.phone": traits.phone, "traits.email": traits.email, "traits.gender": traits.gender,
     };
+
+    // Provider apps: the company name is required. It stays in the encrypted context (Kratos never
+    // sees it); the company is created once the phone is verified (LoginService.finish).
+    let company: string | undefined;
+    if (ctx.pv) {
+      company = str(form.get("company"));
+      values.company = company;
+      if (!validCompanyName(company)) {
+        return this.respond.backWithText("/registration", ctx, "Enter a company name of up to 100 characters.", "error", undefined, values);
+      }
+    }
 
     const flow = await this.kratos.newFlow("registration");
     if (!flow.ok) return new Response("Registration is unavailable", { status: 502 });
@@ -98,7 +111,7 @@ export class AuthController {
     if (!cw || !("flow" in cw) || !res.body.identity?.id) {
       return new Response("Account created, but the verification step could not be started. Please log in.", { status: 500 });
     }
-    await this.store.set({ ch: ctx.ch, sub: res.body.identity.id, phone: traits.phone, vfl: cw.flow.id });
+    await this.store.set({ ch: ctx.ch, sub: res.body.identity.id, phone: traits.phone, vfl: cw.flow.id, ...(company && { cn: company }) });
     return this.respond.to("/verification");
   }
 
@@ -182,7 +195,10 @@ export class AuthController {
     if (!ctx.co || !ctx.sub) return this.respond.noContext();
 
     const name = str((await req.formData()).get("company"));
-    const res = await this.authz.createCompany(name, ctx.sub);
+    if (!validCompanyName(name)) {
+      return this.respond.backWithText("/company", ctx, "Enter a company name of up to 100 characters.", "error", undefined, { company: name });
+    }
+    const res = await this.company.createCompany(name, ctx.sub);
     if (!res.ok) {
       const text = res.reason === "invalid_name"
         ? "Enter a company name of up to 100 characters."

@@ -3,7 +3,7 @@ import { inject, singleton } from "./di";
 import { SignedToken } from "./signed-token";
 
 // A staff invitation, sent by SMS to `phone`: holding it proves control of that number.
-// iid: the invitation in Authz.
+// iid: the invitation in Company.
 export type InviteTokenPayload = { iid: string; phone: string; exp: number };
 
 @singleton()

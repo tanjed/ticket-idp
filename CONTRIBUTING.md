@@ -11,7 +11,7 @@ cd ui && npm install            # UI dependencies
 docker compose up -d --build    # the local stack
 ```
 
-To exercise a real sign-in, run `../TestClient` (a separate repo) and open <http://localhost:3002>. The local phone OTP is `123456`.
+To exercise a real sign-in, run the provider panel `../ProviderUI` (a separate repo) and open <http://localhost:3003>. The local phone OTP is `123456`.
 
 ## Workflow
 
@@ -31,7 +31,7 @@ There is no CI and no automated test suite yet, so a change is checked by hand. 
 | `ui/` | `cd ui && npx tsc --noEmit && npm run build` |
 | `chart/`, `helmvars/` | `make lint template` |
 | `chart/config/` | Restart with `docker compose restart kratos idp-hydra` and confirm both come up. If you touched `selfservice.yaml`, `courier.yaml` or a `webhooks/*.jsonnet`, run a signup and check the events (below) |
-| Any flow (login, signup, OTP, recovery, email) | Walk the flow through `../TestClient` and check the events it should fire reach `idp.events` |
+| Any flow (login, signup, OTP, recovery, email) | Walk the flow through `../ProviderUI` and check the events it should fire reach `idp.events` |
 
 To read the events locally:
 

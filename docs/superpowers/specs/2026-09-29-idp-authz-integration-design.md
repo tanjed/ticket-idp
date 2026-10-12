@@ -26,15 +26,17 @@ Behind the context cookie like every auth page (proxy matcher, page guard, POST 
 
 Consent reads `consent.client.metadata.user_type`:
 - consumer: access token gets `user_type: "consumer"`.
-- provider: fetch claims again (fresh); access token gets `user_type: "provider"`, `company_id`, `roles` (`[{id, name, version}]`). A 404 or 403 rejects the consent (`access_denied`): a remembered login cannot mint a provider token for someone who has left the company.
+- provider: fetch claims again (fresh); access token gets `user_type: "provider"`, `company_id`, `roles` (`[{id, name, version}]`), `authz_version` (a number). A 404 or 403 rejects the consent (`access_denied`): a remembered login cannot mint a provider token for someone who has left the company.
 
-`oauth2.allowed_top_level_claims` gains `user_type`, `company_id`, `roles` (invariant 9).
+`oauth2.allowed_top_level_claims` gains `user_type`, `company_id`, `roles`, `authz_version` (invariant 9).
+
+**Token hook** (2026-10-06, with Authz's Redis gateway view): Hydra calls `oauth2.token_hook` (`POST /api/internal/token-hook`, internal) on every token exchange. On a provider refresh it fetches the claims again from Authz and returns the access token's claims whole with fresh `company_id`, `roles`, `authz_version` (and the ID token's unchanged); a 404 or 403 from Authz refuses the refresh (403), Authz unreachable fails it (503). Anything else: 204, claims kept. This is what lets the gateway refuse a stale token (`401 token_stale`) without forcing a new login.
 
 ## 5. Staff invitations
 
 - `GET /api/internal/identities?phone=` → `{id}` or 404. Called by Authz before creating an invitation.
 - `POST /api/internal/invitations {invitation_id, phone, company_name, expires_at}` → signs an invite token (`INVITE_TOKEN_SECRET`, HMAC, carries `invitation_id`, `phone`, `exp`) and publishes `USER_INVITED {phone, company_name, invite_url}` (the notification service sends the SMS). In dev (`DEV_LOG_EMAIL_LINKS`) the link is also logged.
-- Both refuse requests addressed to the public host, like the Kratos webhook; the ingress never routes `/api/internal/*`.
+- Like the Kratos webhook, they have no check of their own: the ingress never routes `/api/internal/*`.
 - `/invite?token=`: a landing page like `/verify-email` (no context cookie: it is reached from an SMS, not from a Hydra login). It verifies the token, reads the invitation from Authz, and:
   - existing identity for that phone: a "Join <company>" button;
   - otherwise: first name, last name, email, password.

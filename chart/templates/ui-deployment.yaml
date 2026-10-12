@@ -41,6 +41,7 @@ spec:
             - { name: KAFKA_BROKERS, value: {{ required "kafka.brokers is required (see helmvars/)" .Values.kafka.brokers | quote }} }
             - { name: KAFKA_TOPIC_EVENTS, value: {{ .Values.kafka.topic | quote }} }
             - { name: AUTHZ_INTERNAL_URL, value: {{ .Values.ui.authzInternalUrl | quote }} }
+            - { name: COMPANY_INTERNAL_URL, value: {{ .Values.ui.companyInternalUrl | quote }} }
             {{- range $env, $key := dict "UI_COOKIE_SECRET" "cookieSecret" "EMAIL_TOKEN_SECRET" "emailTokenSecret" "INVITE_TOKEN_SECRET" "inviteTokenSecret" }}
             - name: {{ $env }}
               valueFrom: { secretKeyRef: { name: {{ $.Values.secrets.ui.name }}, key: {{ $key }} } }

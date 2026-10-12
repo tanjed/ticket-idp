@@ -12,6 +12,10 @@ ttl:
   access_token: 10m
   refresh_token: 720h
 oauth2:
-  # Hydra silently DROPS custom claims not listed here. These are set by the UI at consent
-  # (user_type, company_id and roles are what the APISIX gateway authorizes with).
-  allowed_top_level_claims: [email_verified, phone_number_verified, user_type, company_id, roles]
+  # Hydra silently DROPS custom claims not listed here. These are set by the UI at consent and, for
+  # provider refreshes, by the token hook (user_type, company_id, roles and authz_version are what
+  # the APISIX gateway authorizes with).
+  allowed_top_level_claims: [email_verified, phone_number_verified, user_type, company_id, roles, authz_version]
+  # Called on every token exchange: a provider's refreshed token gets fresh claims from Authz. The
+  # UI's cluster-internal service name, as Kratos' URLs (the chart's UI Service stays on 3001).
+  token_hook: http://idp-ui:3001/api/internal/token-hook
